@@ -1,18 +1,19 @@
 ﻿# Teaching Records
 
-A personal teaching record system for tracking the classes actually taught, comparing them with the planned schedule, and calculating reliable weekly/monthly/semester statistics for salary.
+A personal teaching record system for a physics teacher. It tracks the classes actually taught, compares them with the planned weekly schedule, and calculates reliable weekly/monthly/semester totals for salary checking.
 
 The key rule is simple: **`ClassRecord` is the source of truth**. Schedule rules describe what should happen; records describe what actually happened.
 
 ## Features
 
-- Manage student groups and courses
-- Define recurring weekly schedule rules
+- Manage teaching classes such as `PA4`
+- Store each class's usual classroom and notes
+- Define recurring weekly schedule rules by class, weekday, and time
 - Show today's expected classes dynamically
 - Mark classes as taught or canceled from the Today page
 - Add, edit, and delete actual class records manually
 - Keep edit logs when class records are changed
-- View weekly and monthly taught-class totals, hours, and salary
+- View weekly and monthly taught-class totals and hours
 - Run as a web app suitable for Windows, macOS, and mobile browsers
 
 ## Tech Stack
@@ -21,6 +22,32 @@ The key rule is simple: **`ClassRecord` is the source of truth**. Schedule rules
 - Database: PostgreSQL for normal deployment; SQLite is convenient for local development
 - Frontend: React, TypeScript, Vite
 - UI: plain CSS with lucide-react icons
+
+## Core Data Model
+
+```text
+TeachingClass
+- name          example: PA4
+- classroom     example: Room 302
+- notes
+
+ScheduleRule
+- teaching_class_id
+- weekday
+- start_time
+- duration_minutes
+- active_from / active_until
+- notes
+
+ClassRecord
+- teaching_class_id
+- classroom     actual classroom snapshot
+- date
+- start_time
+- duration_minutes
+- status        taught / canceled / rescheduled / extra / pending
+- notes
+```
 
 ## Project Structure
 
@@ -53,6 +80,28 @@ class_records/
 
 On Windows PowerShell, if `npm` is blocked by execution policy, use `npm.cmd`.
 
+
+## One-Command Local Run
+
+From the project root, start the SQLite database file, backend, and frontend dev server with:
+
+```powershell
+.\scripts\start-dev.ps1
+```
+
+Then open:
+
+```text
+http://localhost:5173
+```
+
+Stop the dev servers with:
+
+```powershell
+.\scripts\stop-dev.ps1
+```
+
+Logs are written to `.dev-logs/`.
 ## Quick Start With SQLite
 
 This is the easiest way to develop and test the app locally.
@@ -129,21 +178,22 @@ $env:DATABASE_URL="your_database_url_here"
 
 1. Open the app.
 2. Go to **Schedule**.
-3. Add a student group.
-4. Add a course with a default rate.
-5. Add a schedule rule for today's weekday.
+3. Add a class, for example `PA4`.
+4. Add its classroom, for example `Room 302`.
+5. Add a schedule rule for today's weekday and time.
 6. Go to **Today**.
 7. Mark the class as taught.
 8. Go to **Stats** and check the weekly/monthly totals.
-9. Go to **Records** and manually adjust the record if needed.
+9. Go to **Records** and manually adjust classroom, status, or notes if needed.
 
 ## Development Notes
 
 - Generated schedule records are not stored in the database.
 - `/today` merges dynamic schedule expectations with actual records.
-- Salary is calculated only from taught `ClassRecord` rows.
+- Salary/counting should be based only on `ClassRecord` rows.
 - SQLite files such as `backend/dev.db` are local runtime data and ignored by Git.
 - Build output such as `frontend/dist` is ignored by Git.
+- This early version does not include migrations yet. If you changed schemas while using SQLite, remove `backend/dev.db` and restart the backend.
 
 ## Useful Commands
 
@@ -165,3 +215,4 @@ Stop local PostgreSQL:
 ```powershell
 docker compose down
 ```
+

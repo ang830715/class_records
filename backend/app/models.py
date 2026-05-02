@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+﻿from datetime import date, datetime, time
 from enum import StrEnum
 
 from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, Time, func
@@ -24,21 +24,13 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class StudentGroup(Base):
-    __tablename__ = "student_groups"
+class TeachingClass(Base):
+    __tablename__ = "teaching_classes"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(160), unique=True)
+    classroom: Mapped[str | None] = mapped_column(String(120))
     notes: Mapped[str | None] = mapped_column(Text)
-
-
-class Course(Base):
-    __tablename__ = "courses"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(160), unique=True)
-    default_duration_minutes: Mapped[int] = mapped_column(Integer, default=60)
-    default_rate: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
 
 
 class ScheduleRule(Base):
@@ -46,8 +38,7 @@ class ScheduleRule(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), default=1)
-    student_group_id: Mapped[int] = mapped_column(ForeignKey("student_groups.id"))
-    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"))
+    teaching_class_id: Mapped[int] = mapped_column(ForeignKey("teaching_classes.id"))
     weekday: Mapped[int] = mapped_column(Integer)
     start_time: Mapped[time] = mapped_column(Time)
     duration_minutes: Mapped[int] = mapped_column(Integer)
@@ -56,8 +47,7 @@ class ScheduleRule(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     notes: Mapped[str | None] = mapped_column(Text)
 
-    student_group: Mapped[StudentGroup] = relationship()
-    course: Mapped[Course] = relationship()
+    teaching_class: Mapped[TeachingClass] = relationship()
 
 
 class ClassRecord(Base):
@@ -66,8 +56,8 @@ class ClassRecord(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), default=1)
     schedule_rule_id: Mapped[int | None] = mapped_column(ForeignKey("schedule_rules.id"))
-    student_group_id: Mapped[int] = mapped_column(ForeignKey("student_groups.id"))
-    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"))
+    teaching_class_id: Mapped[int] = mapped_column(ForeignKey("teaching_classes.id"))
+    classroom: Mapped[str | None] = mapped_column(String(120))
     date: Mapped[date] = mapped_column(Date, index=True)
     start_time: Mapped[time] = mapped_column(Time)
     duration_minutes: Mapped[int] = mapped_column(Integer)
@@ -80,8 +70,7 @@ class ClassRecord(Base):
     )
 
     schedule_rule: Mapped[ScheduleRule | None] = relationship()
-    student_group: Mapped[StudentGroup] = relationship()
-    course: Mapped[Course] = relationship()
+    teaching_class: Mapped[TeachingClass] = relationship()
 
 
 class Semester(Base):

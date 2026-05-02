@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   color: #1d2528;
   background: #f5f2ea;
   font-family:
@@ -142,7 +142,8 @@ nav {
 
 .control,
 .inline-select,
-.inline-number {
+.inline-number,
+.inline-text {
   min-height: 40px;
   border: 1px solid #cfd8d3;
   border-radius: 8px;
@@ -153,6 +154,11 @@ nav {
 
 .control.compact {
   max-width: 110px;
+}
+
+.control.wide-field {
+  min-width: 240px;
+  flex: 1 1 280px;
 }
 
 .banner,
@@ -209,6 +215,11 @@ nav {
 .schedule-item p {
   margin: 4px 0 0;
   color: #667275;
+}
+
+.note-line {
+  white-space: normal;
+  color: #526164;
 }
 
 .time-pill {
@@ -305,6 +316,14 @@ th {
 
 .inline-number {
   width: 96px;
+}
+
+.inline-text {
+  width: 160px;
+}
+
+.inline-text.note-cell {
+  width: 260px;
 }
 
 .segmented {
@@ -404,3 +423,4 @@ th {
     grid-template-columns: 1fr;
   }
 }
+

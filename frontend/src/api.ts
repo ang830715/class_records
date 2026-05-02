@@ -1,10 +1,9 @@
-import type {
+﻿import type {
   ClassRecord,
-  Course,
   ScheduleRule,
   Semester,
   Stats,
-  StudentGroup,
+  TeachingClass,
   TodayItem,
 } from "./types";
 
@@ -29,13 +28,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  studentGroups: () => request<StudentGroup[]>("/student-groups"),
-  createStudentGroup: (body: Partial<StudentGroup>) =>
-    request<StudentGroup>("/student-groups", { method: "POST", body: JSON.stringify(body) }),
-
-  courses: () => request<Course[]>("/courses"),
-  createCourse: (body: Partial<Course>) =>
-    request<Course>("/courses", { method: "POST", body: JSON.stringify(body) }),
+  classes: () => request<TeachingClass[]>("/classes"),
+  createClass: (body: Partial<TeachingClass>) =>
+    request<TeachingClass>("/classes", { method: "POST", body: JSON.stringify(body) }),
+  updateClass: (id: number, body: Partial<TeachingClass>) =>
+    request<TeachingClass>(`/classes/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteClass: (id: number) => request<void>(`/classes/${id}`, { method: "DELETE" }),
 
   schedule: () => request<ScheduleRule[]>("/schedule"),
   createSchedule: (body: Partial<ScheduleRule>) =>

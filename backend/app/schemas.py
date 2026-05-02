@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import date as Date
 from datetime import datetime as DateTime
@@ -19,43 +19,23 @@ class UserRead(BaseModel):
     created_at: DateTime
 
 
-class StudentGroupBase(BaseModel):
+class TeachingClassBase(BaseModel):
     name: str = Field(min_length=1, max_length=160)
+    classroom: str | None = Field(default=None, max_length=120)
     notes: str | None = None
 
 
-class StudentGroupCreate(StudentGroupBase):
+class TeachingClassCreate(TeachingClassBase):
     pass
 
 
-class StudentGroupUpdate(BaseModel):
+class TeachingClassUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
+    classroom: str | None = Field(default=None, max_length=120)
     notes: str | None = None
 
 
-class StudentGroupRead(StudentGroupBase):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-
-
-class CourseBase(BaseModel):
-    name: str = Field(min_length=1, max_length=160)
-    default_duration_minutes: int = Field(default=60, gt=0)
-    default_rate: Decimal = Field(default=Decimal("0"), ge=0)
-
-
-class CourseCreate(CourseBase):
-    pass
-
-
-class CourseUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=160)
-    default_duration_minutes: int | None = Field(default=None, gt=0)
-    default_rate: Decimal | None = Field(default=None, ge=0)
-
-
-class CourseRead(CourseBase):
+class TeachingClassRead(TeachingClassBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -63,11 +43,10 @@ class CourseRead(CourseBase):
 
 class ScheduleRuleBase(BaseModel):
     user_id: int = 1
-    student_group_id: int
-    course_id: int
+    teaching_class_id: int
     weekday: int = Field(ge=0, le=6)
     start_time: Time
-    duration_minutes: int = Field(gt=0)
+    duration_minutes: int = Field(default=60, gt=0)
     active_from: Date
     active_until: Date | None = None
     is_active: bool = True
@@ -79,8 +58,7 @@ class ScheduleRuleCreate(ScheduleRuleBase):
 
 
 class ScheduleRuleUpdate(BaseModel):
-    student_group_id: int | None = None
-    course_id: int | None = None
+    teaching_class_id: int | None = None
     weekday: int | None = Field(default=None, ge=0, le=6)
     start_time: Time | None = None
     duration_minutes: int | None = Field(default=None, gt=0)
@@ -94,18 +72,17 @@ class ScheduleRuleRead(ScheduleRuleBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    student_group: StudentGroupRead
-    course: CourseRead
+    teaching_class: TeachingClassRead
 
 
 class ClassRecordBase(BaseModel):
     user_id: int = 1
     schedule_rule_id: int | None = None
-    student_group_id: int
-    course_id: int
+    teaching_class_id: int
+    classroom: str | None = Field(default=None, max_length=120)
     date: Date
     start_time: Time
-    duration_minutes: int = Field(gt=0)
+    duration_minutes: int = Field(default=60, gt=0)
     status: ClassStatus = ClassStatus.pending
     fee_amount: Decimal = Field(default=Decimal("0"), ge=0)
     notes: str | None = None
@@ -117,8 +94,8 @@ class ClassRecordCreate(ClassRecordBase):
 
 class ClassRecordUpdate(BaseModel):
     schedule_rule_id: int | None = None
-    student_group_id: int | None = None
-    course_id: int | None = None
+    teaching_class_id: int | None = None
+    classroom: str | None = Field(default=None, max_length=120)
     date: Date | None = None
     start_time: Time | None = None
     duration_minutes: int | None = Field(default=None, gt=0)
@@ -133,8 +110,7 @@ class ClassRecordRead(ClassRecordBase):
     id: int
     created_at: DateTime
     updated_at: DateTime
-    student_group: StudentGroupRead
-    course: CourseRead
+    teaching_class: TeachingClassRead
 
 
 class SemesterBase(BaseModel):
@@ -160,12 +136,11 @@ class TodayItem(BaseModel):
     expected_date: Date
 
 
-class StatsByStudent(BaseModel):
-    student_group_id: int
-    student_group_name: str
+class StatsByClass(BaseModel):
+    teaching_class_id: int
+    class_name: str
     taught_count: int
     total_minutes: int
-    salary: Decimal
 
 
 class StatsRead(BaseModel):
@@ -178,7 +153,7 @@ class StatsRead(BaseModel):
     pending_count: int
     total_minutes: int
     salary: Decimal
-    by_student: list[StatsByStudent]
+    by_class: list[StatsByClass]
 
 
 class EditLogRead(BaseModel):

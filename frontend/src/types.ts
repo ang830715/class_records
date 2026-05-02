@@ -1,23 +1,16 @@
-export type ClassStatus = "taught" | "canceled" | "rescheduled" | "extra" | "pending";
+﻿export type ClassStatus = "taught" | "canceled" | "rescheduled" | "extra" | "pending";
 
-export interface StudentGroup {
+export interface TeachingClass {
   id: number;
   name: string;
+  classroom?: string | null;
   notes?: string | null;
-}
-
-export interface Course {
-  id: number;
-  name: string;
-  default_duration_minutes: number;
-  default_rate: string;
 }
 
 export interface ScheduleRule {
   id: number;
   user_id: number;
-  student_group_id: number;
-  course_id: number;
+  teaching_class_id: number;
   weekday: number;
   start_time: string;
   duration_minutes: number;
@@ -25,16 +18,15 @@ export interface ScheduleRule {
   active_until?: string | null;
   is_active: boolean;
   notes?: string | null;
-  student_group: StudentGroup;
-  course: Course;
+  teaching_class: TeachingClass;
 }
 
 export interface ClassRecord {
   id: number;
   user_id: number;
   schedule_rule_id?: number | null;
-  student_group_id: number;
-  course_id: number;
+  teaching_class_id: number;
+  classroom?: string | null;
   date: string;
   start_time: string;
   duration_minutes: number;
@@ -43,8 +35,7 @@ export interface ClassRecord {
   notes?: string | null;
   created_at: string;
   updated_at: string;
-  student_group: StudentGroup;
-  course: Course;
+  teaching_class: TeachingClass;
 }
 
 export interface TodayItem {
@@ -54,12 +45,11 @@ export interface TodayItem {
   expected_date: string;
 }
 
-export interface StatsByStudent {
-  student_group_id: number;
-  student_group_name: string;
+export interface StatsByClass {
+  teaching_class_id: number;
+  class_name: string;
   taught_count: number;
   total_minutes: number;
-  salary: string;
 }
 
 export interface Stats {
@@ -72,7 +62,7 @@ export interface Stats {
   pending_count: number;
   total_minutes: number;
   salary: string;
-  by_student: StatsByStudent[];
+  by_class: StatsByClass[];
 }
 
 export interface Semester {

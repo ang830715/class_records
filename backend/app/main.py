@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+﻿from datetime import date, timedelta
 from decimal import Decimal
 from typing import Annotated
 
@@ -8,31 +8,28 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .database import Base, engine, get_db
-from .models import ClassRecord, ClassStatus, Course, EditLog, ScheduleRule, Semester, StudentGroup, User
+from .models import ClassRecord, ClassStatus, EditLog, ScheduleRule, Semester, TeachingClass, User
 from .schemas import (
     ClassRecordCreate,
     ClassRecordRead,
     ClassRecordUpdate,
-    CourseCreate,
-    CourseRead,
-    CourseUpdate,
     EditLogRead,
     ScheduleRuleCreate,
     ScheduleRuleRead,
     ScheduleRuleUpdate,
     SemesterCreate,
     SemesterRead,
-    StatsByStudent,
+    StatsByClass,
     StatsRead,
-    StudentGroupCreate,
-    StudentGroupRead,
-    StudentGroupUpdate,
+    TeachingClassCreate,
+    TeachingClassRead,
+    TeachingClassUpdate,
     TodayItem,
 )
 
 DbSession = Annotated[Session, Depends(get_db)]
 
-app = FastAPI(title="Teaching Record System", version="0.1.0")
+app = FastAPI(title="Teaching Record System", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,7 +60,7 @@ def schedule_query(user_id: int = 1) -> Select[tuple[ScheduleRule]]:
     return (
         select(ScheduleRule)
         .where(ScheduleRule.user_id == user_id)
-        .options(selectinload(ScheduleRule.student_group), selectinload(ScheduleRule.course))
+        .options(selectinload(ScheduleRule.teaching_class))
         .order_by(ScheduleRule.weekday, ScheduleRule.start_time)
     )
 
@@ -72,7 +69,7 @@ def record_query(user_id: int = 1) -> Select[tuple[ClassRecord]]:
     return (
         select(ClassRecord)
         .where(ClassRecord.user_id == user_id)
-        .options(selectinload(ClassRecord.student_group), selectinload(ClassRecord.course))
+        .options(selectinload(ClassRecord.teaching_class))
         .order_by(ClassRecord.date.desc(), ClassRecord.start_time.desc())
     )
 
@@ -82,23 +79,23 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/student-groups", response_model=list[StudentGroupRead])
-def list_student_groups(db: DbSession) -> list[StudentGroup]:
-    return list(db.scalars(select(StudentGroup).order_by(StudentGroup.name)))
+@app.get("/classes", response_model=list[TeachingClassRead])
+def list_classes(db: DbSession) -> list[TeachingClass]:
+    return list(db.scalars(select(TeachingClass).order_by(TeachingClass.name)))
 
 
-@app.post("/student-groups", response_model=StudentGroupRead, status_code=status.HTTP_201_CREATED)
-def create_student_group(payload: StudentGroupCreate, db: DbSession) -> StudentGroup:
-    item = StudentGroup(**payload.model_dump())
+@app.post("/classes", response_model=TeachingClassRead, status_code=status.HTTP_201_CREATED)
+def create_class(payload: TeachingClassCreate, db: DbSession) -> TeachingClass:
+    item = TeachingClass(**payload.model_dump())
     db.add(item)
     db.commit()
     db.refresh(item)
     return item
 
 
-@app.put("/student-groups/{group_id}", response_model=StudentGroupRead)
-def update_student_group(group_id: int, payload: StudentGroupUpdate, db: DbSession) -> StudentGroup:
-    item = get_or_404(db, StudentGroup, group_id)
+@app.put("/classes/{class_id}", response_model=TeachingClassRead)
+def update_class(class_id: int, payload: TeachingClassUpdate, db: DbSession) -> TeachingClass:
+    item = get_or_404(db, TeachingClass, class_id)
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(item, key, value)
     db.commit()
@@ -106,39 +103,9 @@ def update_student_group(group_id: int, payload: StudentGroupUpdate, db: DbSessi
     return item
 
 
-@app.delete("/student-groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_student_group(group_id: int, db: DbSession) -> None:
-    db.delete(get_or_404(db, StudentGroup, group_id))
-    db.commit()
-
-
-@app.get("/courses", response_model=list[CourseRead])
-def list_courses(db: DbSession) -> list[Course]:
-    return list(db.scalars(select(Course).order_by(Course.name)))
-
-
-@app.post("/courses", response_model=CourseRead, status_code=status.HTTP_201_CREATED)
-def create_course(payload: CourseCreate, db: DbSession) -> Course:
-    item = Course(**payload.model_dump())
-    db.add(item)
-    db.commit()
-    db.refresh(item)
-    return item
-
-
-@app.put("/courses/{course_id}", response_model=CourseRead)
-def update_course(course_id: int, payload: CourseUpdate, db: DbSession) -> Course:
-    item = get_or_404(db, Course, course_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(item, key, value)
-    db.commit()
-    db.refresh(item)
-    return item
-
-
-@app.delete("/courses/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_course(course_id: int, db: DbSession) -> None:
-    db.delete(get_or_404(db, Course, course_id))
+@app.delete("/classes/{class_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_class(class_id: int, db: DbSession) -> None:
+    db.delete(get_or_404(db, TeachingClass, class_id))
     db.commit()
 
 
@@ -151,6 +118,7 @@ def list_schedule(db: DbSession, user_id: int = 1) -> list[ScheduleRule]:
 def create_schedule_rule(payload: ScheduleRuleCreate, db: DbSession) -> ScheduleRule:
     if payload.active_until and payload.active_until < payload.active_from:
         raise HTTPException(status_code=400, detail="active_until must be after active_from")
+    get_or_404(db, TeachingClass, payload.teaching_class_id)
     item = ScheduleRule(**payload.model_dump())
     db.add(item)
     db.commit()
@@ -161,6 +129,8 @@ def create_schedule_rule(payload: ScheduleRuleCreate, db: DbSession) -> Schedule
 def update_schedule_rule(rule_id: int, payload: ScheduleRuleUpdate, db: DbSession) -> ScheduleRule:
     item = get_or_404(db, ScheduleRule, rule_id)
     values = payload.model_dump(exclude_unset=True)
+    if "teaching_class_id" in values and values["teaching_class_id"] is not None:
+        get_or_404(db, TeachingClass, values["teaching_class_id"])
     active_from = values.get("active_from", item.active_from)
     active_until = values.get("active_until", item.active_until)
     if active_until and active_until < active_from:
@@ -194,6 +164,7 @@ def list_records(
 
 @app.post("/records", response_model=ClassRecordRead, status_code=status.HTTP_201_CREATED)
 def create_record(payload: ClassRecordCreate, db: DbSession) -> ClassRecord:
+    get_or_404(db, TeachingClass, payload.teaching_class_id)
     item = ClassRecord(**payload.model_dump())
     db.add(item)
     db.commit()
@@ -204,6 +175,8 @@ def create_record(payload: ClassRecordCreate, db: DbSession) -> ClassRecord:
 def update_record(record_id: int, payload: ClassRecordUpdate, db: DbSession) -> ClassRecord:
     item = get_or_404(db, ClassRecord, record_id)
     values = payload.model_dump(exclude_unset=True)
+    if "teaching_class_id" in values and values["teaching_class_id"] is not None:
+        get_or_404(db, TeachingClass, values["teaching_class_id"])
     for key, value in values.items():
         old_value = getattr(item, key)
         if old_value != value:
@@ -340,29 +313,28 @@ def stats(
         )
     )
 
-    def count(status: ClassStatus) -> int:
-        return sum(1 for record in records if record.status == status)
+    def count(record_status: ClassStatus) -> int:
+        return sum(1 for record in records if record.status == record_status)
 
     taught_records = [record for record in records if record.status == ClassStatus.taught]
     salary = sum((Decimal(record.fee_amount) for record in taught_records), Decimal("0"))
     total_minutes = sum(record.duration_minutes for record in taught_records)
-    by_student_rows = db.execute(
+    by_class_rows = db.execute(
         select(
-            StudentGroup.id,
-            StudentGroup.name,
+            TeachingClass.id,
+            TeachingClass.name,
             func.count(ClassRecord.id),
             func.coalesce(func.sum(ClassRecord.duration_minutes), 0),
-            func.coalesce(func.sum(ClassRecord.fee_amount), 0),
         )
-        .join(ClassRecord, ClassRecord.student_group_id == StudentGroup.id)
+        .join(ClassRecord, ClassRecord.teaching_class_id == TeachingClass.id)
         .where(
             ClassRecord.user_id == user_id,
             ClassRecord.date >= start,
             ClassRecord.date <= end,
             ClassRecord.status == ClassStatus.taught,
         )
-        .group_by(StudentGroup.id, StudentGroup.name)
-        .order_by(StudentGroup.name)
+        .group_by(TeachingClass.id, TeachingClass.name)
+        .order_by(TeachingClass.name)
     )
 
     return StatsRead(
@@ -375,15 +347,14 @@ def stats(
         pending_count=count(ClassStatus.pending),
         total_minutes=total_minutes,
         salary=salary,
-        by_student=[
-            StatsByStudent(
-                student_group_id=row[0],
-                student_group_name=row[1],
+        by_class=[
+            StatsByClass(
+                teaching_class_id=row[0],
+                class_name=row[1],
                 taught_count=row[2],
                 total_minutes=row[3],
-                salary=row[4],
             )
-            for row in by_student_rows
+            for row in by_class_rows
         ],
     )
 

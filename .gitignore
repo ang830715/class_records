@@ -67,3 +67,6 @@ postgres_data/
 # Build artifacts
 build/
 out/
+
+# Local dev server logs
+.dev-logs/
