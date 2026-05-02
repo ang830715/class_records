@@ -1,5 +1,6 @@
 ﻿from datetime import date, timedelta
 from decimal import Decimal
+from os import getenv
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -29,11 +30,17 @@ from .schemas import (
 
 DbSession = Annotated[Session, Depends(get_db)]
 
-app = FastAPI(title="Teaching Record System", version="0.2.0")
+cors_origins = [
+    origin.strip()
+    for origin in getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    if origin.strip()
+]
+
+app = FastAPI(title="Teaching Record System", version="0.2.0", root_path=getenv("ROOT_PATH", ""))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
