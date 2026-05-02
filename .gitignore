@@ -13,6 +13,13 @@ Desktop.ini
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+id_rsa
+id_rsa_*
+id_ed25519
+id_ed25519_*
+!*.pub
 
 # Python
 __pycache__/
@@ -26,8 +33,12 @@ ENV/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.hypothesis/
+.tox/
+.nox/
 .coverage
 htmlcov/
+pip-wheel-metadata/
 
 # Local dependency scratch folders created during verification
 .packages/
@@ -36,16 +47,25 @@ htmlcov/
 # Backend runtime data
 *.db
 *.db-*
+*.db-journal
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
+*.sqlite-*
+*.sqlite3-*
 *.log
+*.pid
+verify_*.db
 
 # Node / Vite
 node_modules/
 dist/
 dist-ssr/
 *.local
+*.tsbuildinfo
 .vite/
+.vite-temp/
 
 # Package manager caches
 .npm/
