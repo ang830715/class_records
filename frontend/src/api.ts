@@ -9,6 +9,15 @@
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
+type StatsRange = "week" | "month" | "semester" | "custom";
+
+interface StatsParams {
+  range?: StatsRange;
+  start_date?: string;
+  end_date?: string;
+  semester_id?: number;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
@@ -50,8 +59,14 @@ export const api = {
   deleteRecord: (id: number) => request<void>(`/records/${id}`, { method: "DELETE" }),
 
   today: (date?: string) => request<TodayItem[]>(`/today${date ? `?target_date=${date}` : ""}`),
-  stats: (range: "week" | "month" | "semester" | "custom" = "month") =>
-    request<Stats>(`/stats?range=${range}`),
+  stats: (params: StatsParams = {}) => {
+    const query = new URLSearchParams();
+    query.set("range", params.range ?? "month");
+    if (params.start_date) query.set("start_date", params.start_date);
+    if (params.end_date) query.set("end_date", params.end_date);
+    if (params.semester_id) query.set("semester_id", String(params.semester_id));
+    return request<Stats>(`/stats?${query.toString()}`);
+  },
   semesters: () => request<Semester[]>("/semesters"),
   createSemester: (body: Partial<Semester>) =>
     request<Semester>("/semesters", { method: "POST", body: JSON.stringify(body) }),

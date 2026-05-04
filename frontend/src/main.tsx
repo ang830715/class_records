@@ -18,6 +18,7 @@ import type { ClassRecord, ClassStatus, ScheduleRule, Stats, TeachingClass, Toda
 import "./styles.css";
 
 type View = "today" | "records" | "stats" | "schedule";
+type StatsMode = "week" | "month" | "salary" | "custom";
 
 const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const statusLabels: Record<ClassStatus, string> = {
@@ -29,7 +30,14 @@ const statusLabels: Record<ClassStatus, string> = {
 };
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return isoFromDate(new Date());
+}
+
+function isoFromDate(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function dateFromIso(value: string): Date {
@@ -47,6 +55,16 @@ function longDateLabel(value: string): string {
 
 function shortWeekdayLabel(value: string): string {
   return new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(dateFromIso(value));
+}
+
+function salaryPeriodFor(value: string): { start: string; end: string } {
+  const selected = dateFromIso(value);
+  const year = selected.getFullYear();
+  const month = selected.getMonth();
+  const isAfterPeriodStart = selected.getDate() >= 15;
+  const start = new Date(year, isAfterPeriodStart ? month : month - 1, 15);
+  const end = new Date(year, isAfterPeriodStart ? month + 1 : month, 15);
+  return { start: isoFromDate(start), end: isoFromDate(end) };
 }
 
 function timeOnly(value: string): string {
@@ -347,14 +365,30 @@ function RecordsView({ classes, records, refresh }: ReturnType<typeof useAppData
 }
 
 function StatsView() {
-  const [range, setRange] = useState<"week" | "month">("month");
+  const initialSalaryPeriod = salaryPeriodFor(todayIso());
+  const [mode, setMode] = useState<StatsMode>("salary");
+  const [startDate, setStartDate] = useState(initialSalaryPeriod.start);
+  const [endDate, setEndDate] = useState(initialSalaryPeriod.end);
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setError(null);
-    api.stats(range).then(setStats).catch((err) => setError(err instanceof Error ? err.message : "Could not load stats"));
-  }, [range]);
+    const request =
+      mode === "custom" || mode === "salary"
+        ? api.stats({ range: "custom", start_date: startDate, end_date: endDate })
+        : api.stats({ range: mode });
+    request.then(setStats).catch((err) => setError(err instanceof Error ? err.message : "Could not load stats"));
+  }, [mode, startDate, endDate]);
+
+  function chooseMode(nextMode: StatsMode) {
+    setMode(nextMode);
+    if (nextMode === "salary") {
+      const period = salaryPeriodFor(todayIso());
+      setStartDate(period.start);
+      setEndDate(period.end);
+    }
+  }
 
   return (
     <div className="view">
@@ -362,12 +396,22 @@ function StatsView() {
         <div>
           <p className="eyebrow">Teaching totals</p>
           <h2>Stats</h2>
+          {stats && <p className="date-heading">{stats.start_date} to {stats.end_date}</p>}
         </div>
         <div className="segmented">
-          <button className={range === "week" ? "selected" : ""} onClick={() => setRange("week")}>Week</button>
-          <button className={range === "month" ? "selected" : ""} onClick={() => setRange("month")}>Month</button>
+          <button className={mode === "week" ? "selected" : ""} onClick={() => chooseMode("week")}>Week</button>
+          <button className={mode === "month" ? "selected" : ""} onClick={() => chooseMode("month")}>Month</button>
+          <button className={mode === "salary" ? "selected" : ""} onClick={() => chooseMode("salary")}>Salary</button>
+          <button className={mode === "custom" ? "selected" : ""} onClick={() => chooseMode("custom")}>Custom</button>
         </div>
       </header>
+      {(mode === "salary" || mode === "custom") && (
+        <div className="toolbar-form">
+          <input className="control" type="date" value={startDate} onChange={(event) => { setMode("custom"); setStartDate(event.target.value); }} />
+          <span className="range-separator">to</span>
+          <input className="control" type="date" value={endDate} onChange={(event) => { setMode("custom"); setEndDate(event.target.value); }} />
+        </div>
+      )}
       {error && <div className="banner">{error}</div>}
       {stats && (
         <>

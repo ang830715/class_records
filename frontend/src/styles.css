@@ -342,7 +342,8 @@ th {
 
 .segmented {
   display: inline-grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(4, minmax(64px, 1fr));
+  max-width: 100%;
   border: 1px solid #cfd8d3;
   border-radius: 8px;
   padding: 4px;
@@ -350,10 +351,10 @@ th {
 }
 
 .segmented button {
-  min-width: 86px;
+  min-width: 0;
   border: 0;
   border-radius: 6px;
-  padding: 8px 12px;
+  padding: 8px 10px;
   color: #435154;
   background: transparent;
   cursor: pointer;
@@ -362,6 +363,11 @@ th {
 .segmented .selected {
   color: white;
   background: #2f6f73;
+}
+
+.range-separator {
+  color: #627174;
+  font-weight: 700;
 }
 
 .metrics {
