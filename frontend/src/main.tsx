@@ -32,6 +32,23 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function dateFromIso(value: string): Date {
+  return new Date(`${value}T00:00:00`);
+}
+
+function longDateLabel(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(dateFromIso(value));
+}
+
+function shortWeekdayLabel(value: string): string {
+  return new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(dateFromIso(value));
+}
+
 function timeOnly(value: string): string {
   return value.slice(0, 5);
 }
@@ -171,6 +188,7 @@ function TodayView({ refresh }: ReturnType<typeof useAppData>) {
   }
 
   const doneCount = items.filter((item) => item.record && item.record.status !== "pending").length;
+  const isToday = date === todayIso();
 
   return (
     <div className="view">
@@ -178,12 +196,20 @@ function TodayView({ refresh }: ReturnType<typeof useAppData>) {
         <div>
           <p className="eyebrow">Daily check</p>
           <h2>Today</h2>
+          <p className="date-heading">{longDateLabel(date)}</p>
         </div>
-        <input className="control" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        <div className="date-controls">
+          {!isToday && (
+            <button className="icon-button subtle" type="button" onClick={() => setDate(todayIso())}>
+              Today
+            </button>
+          )}
+          <input className="control" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        </div>
       </header>
       <div className="summary-strip">
         <strong>{doneCount}</strong>
-        <span>confirmed out of {items.length} expected or actual classes</span>
+        <span>{shortWeekdayLabel(date)} · confirmed out of {items.length} expected or actual classes</span>
       </div>
       <div className="today-list">
         {busy && <div className="loading small">Refreshing...</div>}

@@ -140,6 +140,20 @@ nav {
   gap: 16px;
 }
 
+.date-heading {
+  margin: 6px 0 0;
+  color: #4f5f62;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.date-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .control,
 .inline-select,
 .inline-number,
@@ -408,6 +422,15 @@ th {
 
   .workspace {
     padding: 18px;
+  }
+
+  .view-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .date-controls {
+    justify-content: flex-start;
   }
 
   .class-row {
