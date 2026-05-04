@@ -2,20 +2,20 @@
 
 This file records how the app was deployed to a CentOS 7 VPS and how to repeat the deployment later.
 
-Current production-style setup:
+Current production-style setup after the BT Panel domain/SSL change:
 
 ```text
 Browser
-  -> http://39.99.137.40
-  -> Nginx serves React files from /var/www/class_records
+  -> https://physics.lyxi.top
+  -> BT Panel Nginx serves React files from /www/wwwroot/physics.lyxi.top
 
 Browser API calls
-  -> http://39.99.137.40/api/...
-  -> Nginx proxies to FastAPI on 127.0.0.1:8000
+  -> https://physics.lyxi.top/api/...
+  -> BT Panel Nginx reverse proxy sends /api to FastAPI on 127.0.0.1:8000
   -> FastAPI writes to SQLite at /opt/class_records/data/prod.db
 ```
 
-Important: this app currently has no login. Anyone who can access the IP can edit the records. Add HTTPS and access protection before using it for sensitive data.
+Important: SSL is now handled by BT Panel. The app still has no login. Anyone who can access the domain can edit the records until access protection or authentication is added.
 
 ## Server Facts
 
@@ -23,24 +23,30 @@ The first successful server was:
 
 ```text
 OS: CentOS Linux release 7.9.2009
-Nginx: /www/server/nginx/sbin/nginx, version 1.24.0
+Nginx: BT Panel Nginx at /www/server/nginx/sbin/nginx, version 1.24.0
 Public IP: 39.99.137.40
+Domain: physics.lyxi.top
+HTTPS: enabled by BT Panel
 Backend service: class-records.service
 Backend process: uvicorn on 127.0.0.1:8000
 Python: /opt/class_records/py311/bin/python, version 3.11.15
 ```
 
-Nginx virtual host configs are included from:
+BT Panel manages the website entry:
+
+```text
+Site name: physics.lyxi.top
+Site root: /www/wwwroot/physics.lyxi.top
+SSL: enabled in BT Panel
+```
+
+BT Panel Nginx virtual host configs are included from:
 
 ```text
 /www/server/panel/vhost/nginx/*.conf
 ```
 
-The actual deployed Nginx config file is:
-
-```text
-/www/server/panel/vhost/nginx/class_records.conf
-```
+Do not install another Nginx for this app. Use BT Panel's existing Nginx and configure the domain, SSL, static frontend root, and `/api` reverse proxy there.
 
 ## Project Changes Made For Deployment
 
@@ -48,7 +54,7 @@ The backend was updated so it can run behind Nginx at `/api`:
 
 ```text
 ROOT_PATH=/api
-CORS_ORIGINS=http://39.99.137.40
+CORS_ORIGINS=https://physics.lyxi.top
 ```
 
 These deployment helper files were added:
@@ -81,7 +87,10 @@ The server uses these paths:
   SQLite production database
 
 /var/www/class_records
-  Built React frontend files served by Nginx
+  Old manual frontend folder from the first IP-based deployment
+
+/www/wwwroot/physics.lyxi.top
+  Current BT Panel site root for built React frontend files
 
 /etc/class-records.env
   Backend environment variables
@@ -97,13 +106,19 @@ The server file `/etc/class-records.env` should contain:
 ```text
 DATABASE_URL=sqlite:////opt/class_records/data/prod.db
 ROOT_PATH=/api
-CORS_ORIGINS=http://39.99.137.40
+CORS_ORIGINS=https://physics.lyxi.top
 ```
 
-If deploying to a domain later, change `CORS_ORIGINS` to the real domain, for example:
+If deploying somewhere else later, change `CORS_ORIGINS` to the real domain, for example:
 
 ```text
 CORS_ORIGINS=https://classes.example.com
+```
+
+After changing `/etc/class-records.env`, restart the backend:
+
+```bash
+systemctl restart class-records
 ```
 
 ## First-Time Deployment
@@ -185,7 +200,7 @@ For the current server, the file should be:
 ```text
 DATABASE_URL=sqlite:////opt/class_records/data/prod.db
 ROOT_PATH=/api
-CORS_ORIGINS=http://39.99.137.40
+CORS_ORIGINS=https://physics.lyxi.top
 ```
 
 In `vi`:
@@ -235,16 +250,16 @@ C:\Users\Ang Li\Desktop\coding\class_records\frontend\dist
 
 ### 8. Upload Frontend Files
 
-Create the server folder:
+BT Panel created the website root here:
 
-```bash
-mkdir -p /var/www/class_records
+```text
+/www/wwwroot/physics.lyxi.top
 ```
 
 Upload the contents of `frontend/dist` into:
 
 ```text
-/var/www/class_records
+/www/wwwroot/physics.lyxi.top
 ```
 
 Important: upload the files inside `dist`, not the `dist` folder itself.
@@ -252,58 +267,65 @@ Important: upload the files inside `dist`, not the `dist` folder itself.
 Correct final layout:
 
 ```text
-/var/www/class_records/index.html
-/var/www/class_records/assets/...
-/var/www/class_records/manifest.webmanifest
+/www/wwwroot/physics.lyxi.top/index.html
+/www/wwwroot/physics.lyxi.top/assets/...
+/www/wwwroot/physics.lyxi.top/manifest.webmanifest
 ```
 
 Wrong layout:
 
 ```text
-/var/www/class_records/dist/index.html
+/www/wwwroot/physics.lyxi.top/dist/index.html
 ```
 
 If the wrong layout happens, fix it on the server:
 
 ```bash
-cp -r /var/www/class_records/dist/* /var/www/class_records/
-chmod -R a+rX /var/www/class_records
+cp -r /www/wwwroot/physics.lyxi.top/dist/* /www/wwwroot/physics.lyxi.top/
+chmod -R a+rX /www/wwwroot/physics.lyxi.top
 ```
 
-### 9. Configure Nginx
+### 9. Configure Reverse Proxy And SSL In BT Panel
 
-Create this file on the server:
+BT Panel should manage the public website, SSL certificate, and reverse proxy.
+
+In BT Panel:
 
 ```text
-/www/server/panel/vhost/nginx/class_records.conf
+Website
+  -> physics.lyxi.top
+  -> Settings
+  -> Reverse proxy
 ```
 
-Content for the current IP:
+Create or verify a reverse proxy rule:
+
+```text
+Proxy path/prefix: /api
+Target URL: http://127.0.0.1:8000
+```
+
+Conceptually, BT Panel should generate an Nginx rule equivalent to:
 
 ```nginx
-server {
-    listen 80;
-    server_name 39.99.137.40;
-
-    root /var/www/class_records;
-    index index.html;
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
+location /api/ {
+    proxy_pass http://127.0.0.1:8000/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
 }
 ```
 
-Test and reload Nginx:
+SSL is also managed in BT Panel:
+
+```text
+Website
+  -> physics.lyxi.top
+  -> SSL
+```
+
+After changing BT Panel settings, test the current Nginx config if needed:
 
 ```bash
 /www/server/nginx/sbin/nginx -t -c /www/server/nginx/conf/nginx.conf
@@ -313,14 +335,14 @@ systemctl reload nginx
 Open:
 
 ```text
-http://39.99.137.40
+https://physics.lyxi.top
 ```
 
 Test API through Nginx:
 
 ```text
-http://39.99.137.40/api/health
-http://39.99.137.40/api/classes
+https://physics.lyxi.top/api/health
+https://physics.lyxi.top/api/classes
 ```
 
 ## Updating The App Later
@@ -360,7 +382,7 @@ frontend/dist
 to:
 
 ```text
-/var/www/class_records
+/www/wwwroot/physics.lyxi.top
 ```
 
 After uploading, hard refresh the browser:
@@ -446,9 +468,9 @@ systemctl reload nginx
 Frontend file checks:
 
 ```bash
-ls -la /var/www/class_records
-find /var/www/class_records -maxdepth 2 -type f | head -20
-grep -R "localhost:8000\|/api" -n /var/www/class_records/assets/*.js | head
+ls -la /www/wwwroot/physics.lyxi.top
+find /www/wwwroot/physics.lyxi.top -maxdepth 2 -type f | head -20
+grep -R "localhost:8000\|/api" -n /www/wwwroot/physics.lyxi.top/assets/*.js | head
 ```
 
 Database checks:
@@ -537,42 +559,42 @@ Cause: the uploaded frontend was in the wrong folder shape. `dist` was copied as
 Wrong:
 
 ```text
-/var/www/class_records/dist/index.html
+/www/wwwroot/physics.lyxi.top/dist/index.html
 ```
 
 Correct:
 
 ```text
-/var/www/class_records/index.html
+/www/wwwroot/physics.lyxi.top/index.html
 ```
 
 Fix:
 
 ```bash
-cp -r /var/www/class_records/dist/* /var/www/class_records/
-chmod -R a+rX /var/www/class_records
+cp -r /www/wwwroot/physics.lyxi.top/dist/* /www/wwwroot/physics.lyxi.top/
+chmod -R a+rX /www/wwwroot/physics.lyxi.top
 ```
 
 ### API Worked Directly But Not Through Nginx Curl Test
 
-This command returned 404:
+This command may return 404:
 
 ```bash
 curl -i http://127.0.0.1/api/health
 ```
 
-But this worked in the browser:
+But this is the real public test:
 
 ```text
-http://39.99.137.40/api/health
+https://physics.lyxi.top/api/health
 ```
 
-Reason: Nginx chooses the server block by `server_name`. A request to `127.0.0.1` does not match `server_name 39.99.137.40`.
+Reason: Nginx chooses the server block by `server_name`. A request to `127.0.0.1` does not match the BT Panel site `physics.lyxi.top`.
 
 Use this for browser-facing API tests:
 
 ```text
-http://39.99.137.40/api/health
+https://physics.lyxi.top/api/health
 ```
 
 ## Future Improvements
@@ -580,7 +602,7 @@ http://39.99.137.40/api/health
 Before serious use:
 
 ```text
-1. Add HTTPS.
+1. Keep HTTPS enabled in BT Panel.
 2. Add login or private access protection.
 3. Add automatic backups for /opt/class_records/data/prod.db.
 4. Consider PostgreSQL instead of SQLite for more durable server storage.
