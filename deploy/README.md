@@ -1,185 +1,546 @@
-# Server Deployment Notes
+# Class Records Deployment Runbook
 
-This deployment serves the React app with Nginx and runs FastAPI on `127.0.0.1:8000` behind `/api`.
+This file records how the app was deployed to a CentOS 7 VPS and how to repeat the deployment later.
 
-CentOS 7 is past its normal security support window. For an internet-facing app, use firewall rules, HTTPS, and preferably a private access layer such as VPN, Tailscale, or Cloudflare Access.
-
-## 1. Build Locally
-
-From the project root on your computer:
-
-```powershell
-cd frontend
-$env:VITE_API_BASE="/api"
-npm.cmd run build
-```
-
-The built frontend files will be in:
+Current production-style setup:
 
 ```text
-frontend/dist
+Browser
+  -> http://39.99.137.40
+  -> Nginx serves React files from /var/www/class_records
+
+Browser API calls
+  -> http://39.99.137.40/api/...
+  -> Nginx proxies to FastAPI on 127.0.0.1:8000
+  -> FastAPI writes to SQLite at /opt/class_records/data/prod.db
 ```
 
-## 2. Copy Files To The Server
+Important: this app currently has no login. Anyone who can access the IP can edit the records. Add HTTPS and access protection before using it for sensitive data.
 
-Push your latest code to GitHub first. Then use your domain or server IP in place of `your-server`.
+## Server Facts
 
-```powershell
-scp -r frontend/dist your-user@your-server:/tmp/class_records_dist
+The first successful server was:
+
+```text
+OS: CentOS Linux release 7.9.2009
+Nginx: /www/server/nginx/sbin/nginx, version 1.24.0
+Public IP: 39.99.137.40
+Backend service: class-records.service
+Backend process: uvicorn on 127.0.0.1:8000
+Python: /opt/class_records/py311/bin/python, version 3.11.15
 ```
 
-## 3. Prepare Server Source Code
+Nginx virtual host configs are included from:
 
-On the server:
+```text
+/www/server/panel/vhost/nginx/*.conf
+```
+
+The actual deployed Nginx config file is:
+
+```text
+/www/server/panel/vhost/nginx/class_records.conf
+```
+
+## Project Changes Made For Deployment
+
+The backend was updated so it can run behind Nginx at `/api`:
+
+```text
+ROOT_PATH=/api
+CORS_ORIGINS=http://39.99.137.40
+```
+
+These deployment helper files were added:
+
+```text
+deploy/class-records.env.example
+deploy/systemd/class-records.service
+deploy/nginx/class-records.conf
+deploy/README.md
+```
+
+## Server Directory Layout
+
+The server uses these paths:
+
+```text
+/opt/class_records/app
+  Git checkout of this project
+
+/opt/class_records/py311
+  Isolated Python 3.11 environment
+
+/opt/class_records/miniforge
+  Miniforge installer environment used to create Python 3.11
+
+/opt/class_records/data
+  Persistent app data
+
+/opt/class_records/data/prod.db
+  SQLite production database
+
+/var/www/class_records
+  Built React frontend files served by Nginx
+
+/etc/class-records.env
+  Backend environment variables
+
+/etc/systemd/system/class-records.service
+  systemd service for FastAPI
+```
+
+## Backend Environment File
+
+The server file `/etc/class-records.env` should contain:
+
+```text
+DATABASE_URL=sqlite:////opt/class_records/data/prod.db
+ROOT_PATH=/api
+CORS_ORIGINS=http://39.99.137.40
+```
+
+If deploying to a domain later, change `CORS_ORIGINS` to the real domain, for example:
+
+```text
+CORS_ORIGINS=https://classes.example.com
+```
+
+## First-Time Deployment
+
+### 1. Install Python 3.11 On CentOS 7
+
+CentOS 7 does not include Python 3.11. Do not replace the system Python because CentOS tools may depend on it.
+
+Install an isolated Python with Miniforge:
 
 ```bash
-sudo useradd --system --home /opt/class_records --shell /sbin/nologin classrecords
-sudo mkdir -p /opt/class_records
-sudo chown classrecords:classrecords /opt/class_records
-sudo -u classrecords git clone https://github.com/YOUR-GITHUB-USER/YOUR-REPO.git /opt/class_records/app
-```
-
-If the repository already exists on the server later, update it with:
-
-```bash
-cd /opt/class_records/app
-sudo -u classrecords git pull --ff-only
-```
-
-## 4. Install Frontend Files
-
-On the server:
-
-```bash
-sudo mkdir -p /var/www/class_records
-sudo cp -r /tmp/class_records_dist/* /var/www/class_records/
-sudo chown -R nginx:nginx /var/www/class_records
-```
-
-If your Nginx worker does not run as the `nginx` user, replace `nginx:nginx` with the user/group shown by:
-
-```bash
-ps -o user,group,args -C nginx
-```
-
-## 5. Create Python Environment On CentOS 7
-
-The backend needs Python 3.11+ because it uses `StrEnum`. CentOS 7 usually does not have Python 3.11, so use an isolated Miniforge environment.
-
-```bash
+mkdir -p /opt/class_records
 cd /tmp
 curl -L -o Miniforge3-Linux-x86_64.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
 bash Miniforge3-Linux-x86_64.sh -b -p /opt/class_records/miniforge
 /opt/class_records/miniforge/bin/conda create -y -p /opt/class_records/py311 python=3.11 pip
-cd /opt/class_records/app/backend
-sudo /opt/class_records/py311/bin/python -m pip install --upgrade pip
-sudo /opt/class_records/py311/bin/python -m pip install -r requirements.txt
-sudo chown -R classrecords:classrecords /opt/class_records/miniforge /opt/class_records/py311
-```
-
-Check it:
-
-```bash
 /opt/class_records/py311/bin/python --version
 ```
 
-## 6. Configure Backend Environment
-
-For the first private deployment, SQLite is acceptable:
-
-```bash
-sudo cp /opt/class_records/app/deploy/class-records.env.example /etc/class-records.env
-sudo vi /etc/class-records.env
-```
-
-Set your real domain:
+Expected:
 
 ```text
-DATABASE_URL=sqlite:////opt/class_records/app/backend/prod.db
+Python 3.11.x
+```
+
+If the server has a poor GitHub connection, download the Miniforge `.sh` file on your computer and upload it to `/tmp` with Xftp, then run:
+
+```bash
+bash /tmp/Miniforge3-Linux-x86_64.sh -b -p /opt/class_records/miniforge
+```
+
+### 2. Clone The Project
+
+```bash
+id classrecords >/dev/null 2>&1 || useradd --system --home /opt/class_records --shell /sbin/nologin classrecords
+mkdir -p /opt/class_records
+
+if [ -d /opt/class_records/app/.git ]; then
+  cd /opt/class_records/app && git pull --ff-only
+else
+  git clone https://github.com/ang830715/class_records.git /opt/class_records/app
+fi
+```
+
+### 3. Install Backend Dependencies
+
+```bash
+cd /opt/class_records/app/backend
+/opt/class_records/py311/bin/python -m pip install --upgrade pip
+/opt/class_records/py311/bin/python -m pip install -r requirements.txt
+```
+
+On CentOS 7, `greenlet` may fail to build from source. If that happens:
+
+```bash
+/opt/class_records/miniforge/bin/conda install -y -p /opt/class_records/py311 -c conda-forge greenlet
+cd /opt/class_records/app/backend
+/opt/class_records/py311/bin/python -m pip install -r requirements.txt
+```
+
+### 4. Prepare Data Directory
+
+The SQLite database should live outside the source code checkout:
+
+```bash
+mkdir -p /opt/class_records/data
+chown -R classrecords:classrecords /opt/class_records/data
+```
+
+### 5. Create Backend Env File
+
+```bash
+cp /opt/class_records/app/deploy/class-records.env.example /etc/class-records.env
+vi /etc/class-records.env
+```
+
+For the current server, the file should be:
+
+```text
+DATABASE_URL=sqlite:////opt/class_records/data/prod.db
 ROOT_PATH=/api
-CORS_ORIGINS=https://your-domain.example
+CORS_ORIGINS=http://39.99.137.40
 ```
 
-For a more durable setup, replace `DATABASE_URL` with PostgreSQL later.
+In `vi`:
 
-## 7. Install And Start The Backend Service
-
-```bash
-sudo cp /opt/class_records/app/deploy/systemd/class-records.service /etc/systemd/system/class-records.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now class-records
-sudo systemctl status class-records
+```text
+i       enter insert mode
+Esc     leave insert mode
+:wq     save and quit
 ```
 
-Check the API locally on the server:
+### 6. Install And Start Backend Service
 
 ```bash
-curl http://127.0.0.1:8000/health
+cp /opt/class_records/app/deploy/systemd/class-records.service /etc/systemd/system/class-records.service
+systemctl daemon-reload
+systemctl enable --now class-records
+systemctl status class-records --no-pager
 ```
 
-## 8. Configure Nginx
+Test the backend on the server:
 
 ```bash
-sudo cp /opt/class_records/app/deploy/nginx/class-records.conf /etc/nginx/conf.d/class-records.conf
-sudo vi /etc/nginx/conf.d/class-records.conf
+curl -s http://127.0.0.1:8000/health
 ```
 
-Replace `your-domain.example` with your real domain.
+Expected:
 
-Then:
+```json
+{"status":"ok"}
+```
+
+### 7. Build Frontend On Local Computer
+
+On the Windows computer, from PowerShell:
+
+```powershell
+cd "C:\Users\Ang Li\Desktop\coding\class_records\frontend"
+$env:VITE_API_BASE="/api"
+npm.cmd run build
+```
+
+This creates:
+
+```text
+C:\Users\Ang Li\Desktop\coding\class_records\frontend\dist
+```
+
+### 8. Upload Frontend Files
+
+Create the server folder:
 
 ```bash
-sudo nginx -t
-sudo setsebool -P httpd_can_network_connect 1
-sudo systemctl reload nginx
+mkdir -p /var/www/class_records
+```
+
+Upload the contents of `frontend/dist` into:
+
+```text
+/var/www/class_records
+```
+
+Important: upload the files inside `dist`, not the `dist` folder itself.
+
+Correct final layout:
+
+```text
+/var/www/class_records/index.html
+/var/www/class_records/assets/...
+/var/www/class_records/manifest.webmanifest
+```
+
+Wrong layout:
+
+```text
+/var/www/class_records/dist/index.html
+```
+
+If the wrong layout happens, fix it on the server:
+
+```bash
+cp -r /var/www/class_records/dist/* /var/www/class_records/
+chmod -R a+rX /var/www/class_records
+```
+
+### 9. Configure Nginx
+
+Create this file on the server:
+
+```text
+/www/server/panel/vhost/nginx/class_records.conf
+```
+
+Content for the current IP:
+
+```nginx
+server {
+    listen 80;
+    server_name 39.99.137.40;
+
+    root /var/www/class_records;
+    index index.html;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+Test and reload Nginx:
+
+```bash
+/www/server/nginx/sbin/nginx -t -c /www/server/nginx/conf/nginx.conf
+systemctl reload nginx
 ```
 
 Open:
 
 ```text
-http://your-domain.example
+http://39.99.137.40
 ```
 
-If the server firewall is enabled, allow HTTP traffic:
-
-```bash
-sudo firewall-cmd --permanent --add-service=http
-sudo firewall-cmd --reload
-```
-
-## 9. Useful Server Commands
-
-```bash
-sudo systemctl restart class-records
-sudo journalctl -u class-records -n 100 --no-pager
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-## CentOS 7 Nginx Path Note
-
-Some CentOS 7 servers use stock Nginx paths:
+Test API through Nginx:
 
 ```text
-/etc/nginx/nginx.conf
-/etc/nginx/conf.d/*.conf
+http://39.99.137.40/api/health
+http://39.99.137.40/api/classes
 ```
 
-Your server may use a custom Nginx install instead:
+## Updating The App Later
+
+When code changes are pushed to GitHub:
+
+### 1. Pull New Code On Server
+
+```bash
+cd /opt/class_records/app
+git pull --ff-only
+```
+
+### 2. Restart Backend If Backend Code Changed
+
+```bash
+systemctl restart class-records
+systemctl status class-records --no-pager
+```
+
+### 3. Rebuild And Reupload Frontend If Frontend Code Changed
+
+On local Windows:
+
+```powershell
+cd "C:\Users\Ang Li\Desktop\coding\class_records\frontend"
+$env:VITE_API_BASE="/api"
+npm.cmd run build
+```
+
+Then upload the contents of:
 
 ```text
-/www/server/nginx/conf/nginx.conf
+frontend/dist
 ```
 
-Find the active include directory with:
+to:
 
-```bash
-sudo /www/server/nginx/sbin/nginx -T | grep -n "include"
+```text
+/var/www/class_records
 ```
 
-Copy `deploy/nginx/class-records.conf` into the included virtual-host directory shown by that command, then test and reload with the same Nginx binary:
+After uploading, hard refresh the browser:
+
+```text
+Ctrl + F5
+```
+
+## Useful Commands
+
+Backend service:
 
 ```bash
-sudo /www/server/nginx/sbin/nginx -t -c /www/server/nginx/conf/nginx.conf
-sudo systemctl reload nginx
+systemctl status class-records --no-pager
+systemctl restart class-records
+journalctl -u class-records -n 50 --no-pager
+```
+
+Backend direct tests:
+
+```bash
+curl -s http://127.0.0.1:8000/health
+curl -s http://127.0.0.1:8000/classes
+```
+
+Nginx tests:
+
+```bash
+/www/server/nginx/sbin/nginx -T | grep -n "include"
+/www/server/nginx/sbin/nginx -t -c /www/server/nginx/conf/nginx.conf
+systemctl reload nginx
+```
+
+Frontend file checks:
+
+```bash
+ls -la /var/www/class_records
+find /var/www/class_records -maxdepth 2 -type f | head -20
+grep -R "localhost:8000\|/api" -n /var/www/class_records/assets/*.js | head
+```
+
+Database checks:
+
+```bash
+ls -lh /opt/class_records/data
+```
+
+Disk checks:
+
+```bash
+df -h
+df -i
+du -sh /opt/* 2>/dev/null | sort -h
+```
+
+## Problems We Hit And Fixes
+
+### Miniforge Installer Failed
+
+Error:
+
+```text
+WARNING: md5sum mismatch of tar archive
+critical libmamba Truncated tar archive detected
+```
+
+Cause: bad or partial download from GitHub.
+
+Fix: download the `.sh` file on the local computer and upload it to the server with Xftp, then run it from `/tmp`.
+
+### greenlet Failed To Build
+
+Error:
+
+```text
+Failed building wheel for greenlet
+```
+
+Cause: CentOS 7 had trouble compiling the dependency from source.
+
+Fix:
+
+```bash
+/opt/class_records/miniforge/bin/conda install -y -p /opt/class_records/py311 -c conda-forge greenlet
+/opt/class_records/py311/bin/python -m pip install -r requirements.txt
+```
+
+### Backend Could Not Open SQLite Database
+
+Error:
+
+```text
+sqlite3.OperationalError: unable to open database file
+```
+
+Cause: database path or permissions were wrong.
+
+Fix: use `/opt/class_records/data/prod.db` and make the directory writable:
+
+```bash
+mkdir -p /opt/class_records/data
+chown -R classrecords:classrecords /opt/class_records/data
+```
+
+### Database Or Disk Is Full
+
+Error:
+
+```text
+sqlite3.OperationalError: database or disk is full
+```
+
+Cause: server disk was full.
+
+Fix: free disk space, then restart:
+
+```bash
+systemctl restart class-records
+```
+
+### Browser Showed 403 Forbidden
+
+Cause: the uploaded frontend was in the wrong folder shape. `dist` was copied as a whole folder.
+
+Wrong:
+
+```text
+/var/www/class_records/dist/index.html
+```
+
+Correct:
+
+```text
+/var/www/class_records/index.html
+```
+
+Fix:
+
+```bash
+cp -r /var/www/class_records/dist/* /var/www/class_records/
+chmod -R a+rX /var/www/class_records
+```
+
+### API Worked Directly But Not Through Nginx Curl Test
+
+This command returned 404:
+
+```bash
+curl -i http://127.0.0.1/api/health
+```
+
+But this worked in the browser:
+
+```text
+http://39.99.137.40/api/health
+```
+
+Reason: Nginx chooses the server block by `server_name`. A request to `127.0.0.1` does not match `server_name 39.99.137.40`.
+
+Use this for browser-facing API tests:
+
+```text
+http://39.99.137.40/api/health
+```
+
+## Future Improvements
+
+Before serious use:
+
+```text
+1. Add HTTPS.
+2. Add login or private access protection.
+3. Add automatic backups for /opt/class_records/data/prod.db.
+4. Consider PostgreSQL instead of SQLite for more durable server storage.
+5. Consider deploying on a newer OS than CentOS 7 later.
+```
+
+Simple SQLite backup command:
+
+```bash
+mkdir -p /opt/class_records/backups
+cp /opt/class_records/data/prod.db /opt/class_records/backups/prod-$(date +%F-%H%M%S).db
 ```
