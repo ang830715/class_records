@@ -9,11 +9,16 @@ The key rule is simple: **`ClassRecord` is the source of truth**. Schedule rules
 - Manage teaching classes such as `PA4`
 - Store each class's usual classroom and notes
 - Define recurring weekly schedule rules by class, weekday, and time
-- Show today's expected classes dynamically
-- Mark classes as taught or canceled from the Today page
+- Show a daily teaching checklist from the weekly schedule
+- Show the selected date and weekday clearly in English
+- Show period labels such as `P1` and `P2` together with start times
+- Mark single classes as taught or canceled from the Today page
+- Mark all scheduled classes as taught for a normal teaching day
+- Cancel all scheduled classes for a holiday or school event day
 - Add, edit, and delete actual class records manually
+- Filter records by salary-period date range, class, and status
 - Keep edit logs when class records are changed
-- View weekly and monthly taught-class totals and hours
+- View weekly, monthly, salary-period, and custom-range taught-class totals and hours
 - Run as a web app suitable for Windows, macOS, and mobile browsers
 
 ## Tech Stack
@@ -59,7 +64,14 @@ class_records/
       main.py
       models.py
       schemas.py
+    scripts/
+      seed_schedule.py
     requirements.txt
+  deploy/
+    README.md
+    class-records.env.example
+    nginx/
+    systemd/
   frontend/
     src/
       api.ts
@@ -102,6 +114,79 @@ Stop the dev servers with:
 ```
 
 Logs are written to `.dev-logs/`.
+
+## Current Workflow
+
+The app is built around the difference between expected classes and actual records:
+
+```text
+ScheduleRule = expected weekly lesson
+ClassRecord = actual class result
+Stats = calculated from ClassRecord rows
+```
+
+Typical daily use:
+
+1. Open **Today**.
+2. Check the date and weekday.
+3. If the day happened normally, use **Mark all taught**.
+4. If the whole day was canceled, use **Cancel day**.
+5. If only one class changed, use the row-level taught/canceled buttons.
+6. Use **Records** later to find and correct individual records.
+
+Salary checking:
+
+1. Open **Stats**.
+2. Use **Salary** for the normal 15th-to-15th period.
+3. Use **Custom** if the school asks for a different start/end date.
+
+Schedule setup:
+
+1. Add reusable class names in **Schedule** with **Add class**.
+2. Add recurring weekly lessons in **Add weekly lesson**.
+3. Use `P1`, `P2`, etc. in **Period / notes** when the note is a period label.
+
+## Real Schedule Seed
+
+The real weekly timetable can be inserted with:
+
+```powershell
+cd backend
+$env:DATABASE_URL="sqlite:///./dev.db"
+.\.venv\Scripts\python.exe scripts\seed_schedule.py
+```
+
+The seed script is safe to run more than once. It creates or updates the expected weekly lessons and does not duplicate matching rules.
+
+On the deployed server, run:
+
+```bash
+cd /opt/class_records/app/backend
+export DATABASE_URL=sqlite:////opt/class_records/data/prod.db
+/opt/class_records/py311/bin/python scripts/seed_schedule.py
+systemctl restart class-records
+```
+
+## Deployment Status
+
+The first successful deployment uses:
+
+```text
+Domain: https://physics.lyxi.top
+Frontend root: /www/wwwroot/physics.lyxi.top
+Backend: FastAPI systemd service on 127.0.0.1:8000
+Reverse proxy: BT Panel routes /api to the backend
+Database: SQLite at /opt/class_records/data/prod.db
+```
+
+Detailed deployment notes and recovery commands are in:
+
+```text
+deploy/README.md
+```
+
+Important: the deployed app currently has HTTPS, but no login system yet.
+
 ## Quick Start With SQLite
 
 This is the easiest way to develop and test the app locally.

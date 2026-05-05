@@ -201,6 +201,12 @@ nav {
   font-size: 1.8rem;
 }
 
+.day-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .today-list,
 .schedule-grid {
   display: grid;
@@ -238,13 +244,25 @@ nav {
 
 .time-pill {
   display: grid;
+  gap: 2px;
   place-items: center;
   width: 64px;
-  height: 38px;
+  min-height: 48px;
   border-radius: 8px;
   color: #112629;
   background: #d8ece8;
   font-weight: 800;
+}
+
+.time-pill span {
+  color: #2f6f73;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.time-pill strong {
+  font-size: 0.98rem;
+  line-height: 1;
 }
 
 .status {
@@ -292,6 +310,42 @@ nav {
   border-radius: 8px;
   padding: 12px;
   background: white;
+}
+
+.schedule-form {
+  align-items: end;
+}
+
+.form-title {
+  flex: 1 0 100%;
+  margin: 0 0 2px;
+  color: #2f3b3e;
+  font-size: 0.95rem;
+}
+
+.field {
+  display: grid;
+  flex: 1 1 160px;
+  gap: 6px;
+}
+
+.field span {
+  color: #607073;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.field.compact {
+  flex: 0 1 120px;
+}
+
+.field.wide-field {
+  flex: 2 1 300px;
+}
+
+.field .control {
+  width: 100%;
 }
 
 .setup-grid {

@@ -45,16 +45,12 @@ function dateFromIso(value: string): Date {
 }
 
 function longDateLabel(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
   }).format(dateFromIso(value));
-}
-
-function shortWeekdayLabel(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(dateFromIso(value));
 }
 
 function salaryPeriodFor(value: string): { start: string; end: string } {
@@ -73,6 +69,23 @@ function timeOnly(value: string): string {
 
 function classRoomLabel(classroom?: string | null): string {
   return classroom?.trim() || "No classroom";
+}
+
+function periodLabel(value?: string | null): string | null {
+  const text = value?.trim();
+  return text && /^P\d+$/i.test(text) ? text.toUpperCase() : null;
+}
+
+function displayNotes(recordNotes?: string | null, scheduleNotes?: string | null, classNotes?: string | null): string | null {
+  const actual = recordNotes?.trim();
+  if (actual && !periodLabel(actual)) {
+    return actual;
+  }
+  const expected = scheduleNotes?.trim();
+  if (expected && !periodLabel(expected)) {
+    return expected;
+  }
+  return classNotes?.trim() || null;
 }
 
 function useAppData() {
@@ -183,28 +196,57 @@ function TodayView({ refresh }: ReturnType<typeof useAppData>) {
     void loadToday();
   }, [date]);
 
-  async function mark(item: TodayItem, status: ClassStatus) {
+  function recordFromSchedule(item: TodayItem, status: ClassStatus): Partial<ClassRecord> | null {
     const rule = item.schedule_rule;
+    if (!rule) return null;
+    return {
+      user_id: rule.user_id,
+      schedule_rule_id: rule.id,
+      teaching_class_id: rule.teaching_class_id,
+      classroom: rule.teaching_class.classroom,
+      date: item.expected_date,
+      start_time: rule.start_time,
+      duration_minutes: rule.duration_minutes,
+      status,
+      fee_amount: "0",
+      notes: rule.notes,
+    };
+  }
+
+  async function mark(item: TodayItem, status: ClassStatus) {
     const existing = item.record;
     if (existing) {
       await api.updateRecord(existing.id, { status });
-    } else if (rule) {
-      await api.createRecord({
-        user_id: rule.user_id,
-        schedule_rule_id: rule.id,
-        teaching_class_id: rule.teaching_class_id,
-        classroom: rule.teaching_class.classroom,
-        date: item.expected_date,
-        start_time: rule.start_time,
-        duration_minutes: rule.duration_minutes,
-        status,
-        fee_amount: "0",
-        notes: rule.notes,
-      });
+    } else {
+      const payload = recordFromSchedule(item, status);
+      if (payload) {
+        await api.createRecord(payload);
+      }
     }
     await Promise.all([loadToday(false), refresh(false)]);
   }
 
+  async function markScheduledDay(status: ClassStatus) {
+    const scheduledItems = items.filter((item) => item.schedule_rule);
+    if (scheduledItems.length === 0) return;
+    setBusy(true);
+    try {
+      await Promise.all(
+        scheduledItems.map((item) => {
+          if (item.record) {
+            return api.updateRecord(item.record.id, { status });
+          }
+          const payload = recordFromSchedule(item, status);
+          return payload ? api.createRecord(payload) : Promise.resolve();
+        }),
+      );
+      await Promise.all([loadToday(false), refresh(false)]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const scheduledCount = items.filter((item) => item.schedule_rule).length;
   const doneCount = items.filter((item) => item.record && item.record.status !== "pending").length;
   const isToday = date === todayIso();
 
@@ -227,7 +269,17 @@ function TodayView({ refresh }: ReturnType<typeof useAppData>) {
       </header>
       <div className="summary-strip">
         <strong>{doneCount}</strong>
-        <span>{shortWeekdayLabel(date)} · confirmed out of {items.length} expected or actual classes</span>
+        <span>confirmed out of {items.length} expected or actual classes</span>
+      </div>
+      <div className="day-actions">
+        <button className="icon-button success" type="button" disabled={busy || scheduledCount === 0} onClick={() => markScheduledDay("taught")}>
+          <Check size={18} />
+          Mark all taught
+        </button>
+        <button className="icon-button danger" type="button" disabled={busy || scheduledCount === 0} onClick={() => markScheduledDay("canceled")}>
+          <X size={18} />
+          Cancel day
+        </button>
       </div>
       <div className="today-list">
         {busy && <div className="loading small">Refreshing...</div>}
@@ -237,11 +289,15 @@ function TodayView({ refresh }: ReturnType<typeof useAppData>) {
           if (!source) return null;
           const teachingClass = item.record?.teaching_class ?? item.schedule_rule?.teaching_class;
           const classroom = item.record?.classroom ?? teachingClass?.classroom;
-          const notes = item.record?.notes ?? item.schedule_rule?.notes ?? teachingClass?.notes;
+          const period = periodLabel(item.schedule_rule?.notes);
+          const notes = displayNotes(item.record?.notes, item.schedule_rule?.notes, teachingClass?.notes);
           const status = item.record?.status ?? "pending";
           return (
             <article className="class-row" key={`${item.kind}-${item.record?.id ?? item.schedule_rule?.id}`}>
-              <div className="time-pill">{timeOnly(source.start_time)}</div>
+              <div className="time-pill">
+                {period && <span>{period}</span>}
+                <strong>{timeOnly(source.start_time)}</strong>
+              </div>
               <div className="class-main">
                 <h3>{teachingClass?.name}</h3>
                 <p>{classRoomLabel(classroom)} · {source.duration_minutes} min</p>
@@ -265,6 +321,13 @@ function TodayView({ refresh }: ReturnType<typeof useAppData>) {
 }
 
 function RecordsView({ classes, records, refresh }: ReturnType<typeof useAppData>) {
+  const salaryPeriod = salaryPeriodFor(todayIso());
+  const [filters, setFilters] = useState({
+    start_date: salaryPeriod.start,
+    end_date: salaryPeriod.end,
+    teaching_class_id: "",
+    status: "" as "" | ClassStatus,
+  });
   const [form, setForm] = useState({
     date: todayIso(),
     start_time: "16:00",
@@ -297,24 +360,80 @@ function RecordsView({ classes, records, refresh }: ReturnType<typeof useAppData
     await refresh();
   }
 
+  const filteredRecords = records.filter((record) => {
+    if (filters.start_date && record.date < filters.start_date) return false;
+    if (filters.end_date && record.date > filters.end_date) return false;
+    if (filters.teaching_class_id && String(record.teaching_class_id) !== filters.teaching_class_id) return false;
+    if (filters.status && record.status !== filters.status) return false;
+    return true;
+  });
+
   return (
     <div className="view">
       <header className="view-header">
         <div>
           <p className="eyebrow">Manual correction</p>
           <h2>Records</h2>
+          <p className="date-heading">{filteredRecords.length} shown out of {records.length} records</p>
         </div>
       </header>
-      <form className="toolbar-form" onSubmit={addRecord}>
-        <input className="control" type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} />
-        <input className="control" type="time" value={form.start_time} onChange={(event) => setForm({ ...form, start_time: event.target.value })} />
-        <select className="control" value={form.teaching_class_id} onChange={(event) => chooseClass(event.target.value)}>
-          <option value="">Class</option>
-          {classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select>
-        <input className="control" placeholder="Classroom" value={form.classroom} onChange={(event) => setForm({ ...form, classroom: event.target.value })} />
-        <input className="control compact" type="number" min="1" value={form.duration_minutes} onChange={(event) => setForm({ ...form, duration_minutes: Number(event.target.value) })} />
-        <input className="control wide-field" placeholder="Notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+      <div className="toolbar-form">
+        <h3 className="form-title">Find records</h3>
+        <label className="field compact">
+          <span>From</span>
+          <input className="control" type="date" value={filters.start_date} onChange={(event) => setFilters({ ...filters, start_date: event.target.value })} />
+        </label>
+        <label className="field compact">
+          <span>To</span>
+          <input className="control" type="date" value={filters.end_date} onChange={(event) => setFilters({ ...filters, end_date: event.target.value })} />
+        </label>
+        <label className="field">
+          <span>Class</span>
+          <select className="control" value={filters.teaching_class_id} onChange={(event) => setFilters({ ...filters, teaching_class_id: event.target.value })}>
+            <option value="">All classes</option>
+            {classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>Status</span>
+          <select className="control" value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value as "" | ClassStatus })}>
+            <option value="">All statuses</option>
+            {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+        <button className="icon-button subtle" type="button" onClick={() => setFilters({ start_date: "", end_date: "", teaching_class_id: "", status: "" })}>
+          Clear
+        </button>
+      </div>
+      <form className="toolbar-form schedule-form" onSubmit={addRecord}>
+        <h3 className="form-title">Add actual class</h3>
+        <label className="field compact">
+          <span>Date</span>
+          <input className="control" type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} />
+        </label>
+        <label className="field compact">
+          <span>Start</span>
+          <input className="control" type="time" value={form.start_time} onChange={(event) => setForm({ ...form, start_time: event.target.value })} />
+        </label>
+        <label className="field">
+          <span>Class</span>
+          <select className="control" value={form.teaching_class_id} onChange={(event) => chooseClass(event.target.value)}>
+            <option value="">Choose class</option>
+            {classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>Classroom</span>
+          <input className="control" placeholder="Actual room" value={form.classroom} onChange={(event) => setForm({ ...form, classroom: event.target.value })} />
+        </label>
+        <label className="field compact">
+          <span>Minutes</span>
+          <input className="control" type="number" min="1" value={form.duration_minutes} onChange={(event) => setForm({ ...form, duration_minutes: Number(event.target.value) })} />
+        </label>
+        <label className="field wide-field">
+          <span>Notes</span>
+          <input className="control" placeholder="Optional" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+        </label>
         <button className="icon-button primary" type="submit" title="Add record">
           <Plus size={18} />
           Add
@@ -334,7 +453,7 @@ function RecordsView({ classes, records, refresh }: ReturnType<typeof useAppData
             </tr>
           </thead>
           <tbody>
-            {records.map((record) => (
+            {filteredRecords.map((record) => (
               <tr key={record.id}>
                 <td>{record.date}</td>
                 <td>{timeOnly(record.start_time)}</td>
@@ -491,24 +610,50 @@ function ScheduleView({ classes, schedule, refresh }: ReturnType<typeof useAppDa
           <h2>Schedule</h2>
         </div>
       </header>
-      <form className="toolbar-form" onSubmit={addClass}>
-        <input className="control" placeholder="Class name, e.g. PA4" value={newClass.name} onChange={(event) => setNewClass({ ...newClass, name: event.target.value })} />
-        <input className="control" placeholder="Classroom" value={newClass.classroom} onChange={(event) => setNewClass({ ...newClass, classroom: event.target.value })} />
-        <input className="control wide-field" placeholder="Notes" value={newClass.notes} onChange={(event) => setNewClass({ ...newClass, notes: event.target.value })} />
+      <form className="toolbar-form schedule-form" onSubmit={addClass}>
+        <h3 className="form-title">Add class</h3>
+        <label className="field">
+          <span>Class name</span>
+          <input className="control" placeholder="PA4" value={newClass.name} onChange={(event) => setNewClass({ ...newClass, name: event.target.value })} />
+        </label>
+        <label className="field">
+          <span>Usual classroom</span>
+          <input className="control" placeholder="2-201" value={newClass.classroom} onChange={(event) => setNewClass({ ...newClass, classroom: event.target.value })} />
+        </label>
+        <label className="field wide-field">
+          <span>Class notes</span>
+          <input className="control" placeholder="Optional" value={newClass.notes} onChange={(event) => setNewClass({ ...newClass, notes: event.target.value })} />
+        </label>
         <button className="icon-button primary" title="Save class"><Save size={18} /> Save</button>
       </form>
-      <form className="toolbar-form" onSubmit={addRule}>
-        <select className="control" value={form.teaching_class_id} onChange={(event) => setForm({ ...form, teaching_class_id: event.target.value })}>
-          <option value="">Class</option>
-          {classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select>
-        <select className="control" value={form.weekday} onChange={(event) => setForm({ ...form, weekday: event.target.value })}>
-          {weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}
-        </select>
-        <input className="control" type="time" value={form.start_time} onChange={(event) => setForm({ ...form, start_time: event.target.value })} />
-        <input className="control compact" type="number" min="1" value={form.duration_minutes} onChange={(event) => setForm({ ...form, duration_minutes: Number(event.target.value) })} />
-        <input className="control wide-field" placeholder="Schedule notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
-        <button className="icon-button primary" type="submit" title="Add schedule rule"><Plus size={18} /> Add</button>
+      <form className="toolbar-form schedule-form" onSubmit={addRule}>
+        <h3 className="form-title">Add weekly lesson</h3>
+        <label className="field">
+          <span>Class</span>
+          <select className="control" value={form.teaching_class_id} onChange={(event) => setForm({ ...form, teaching_class_id: event.target.value })}>
+            <option value="">Choose class</option>
+            {classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>Weekday</span>
+          <select className="control" value={form.weekday} onChange={(event) => setForm({ ...form, weekday: event.target.value })}>
+            {weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}
+          </select>
+        </label>
+        <label className="field compact">
+          <span>Start</span>
+          <input className="control" type="time" value={form.start_time} onChange={(event) => setForm({ ...form, start_time: event.target.value })} />
+        </label>
+        <label className="field compact">
+          <span>Minutes</span>
+          <input className="control" type="number" min="1" value={form.duration_minutes} onChange={(event) => setForm({ ...form, duration_minutes: Number(event.target.value) })} />
+        </label>
+        <label className="field wide-field">
+          <span>Period / notes</span>
+          <input className="control" placeholder="P1, P2, or other note" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+        </label>
+        <button className="icon-button primary" type="submit" title="Add weekly lesson"><Plus size={18} /> Add</button>
       </form>
       <div className="schedule-grid">
         {schedule.map((rule) => (
