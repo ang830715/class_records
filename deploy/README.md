@@ -12,7 +12,7 @@ Browser
 Browser API calls
   -> https://physics.lyxi.top/api/...
   -> BT Panel Nginx reverse proxy sends /api to FastAPI on 127.0.0.1:8000
-  -> FastAPI writes to SQLite at /opt/class_records/data/prod.db
+  -> FastAPI writes to PostgreSQL
 ```
 
 Important: SSL is now handled by BT Panel. The app still has no login. Anyone who can access the domain can edit the records until access protection or authentication is added.
@@ -80,12 +80,6 @@ The server uses these paths:
 /opt/class_records/miniforge
   Miniforge installer environment used to create Python 3.11
 
-/opt/class_records/data
-  Persistent app data
-
-/opt/class_records/data/prod.db
-  SQLite production database
-
 /var/www/class_records
   Old manual frontend folder from the first IP-based deployment
 
@@ -104,7 +98,7 @@ The server uses these paths:
 The server file `/etc/class-records.env` should contain:
 
 ```text
-DATABASE_URL=sqlite:////opt/class_records/data/prod.db
+DATABASE_URL=postgresql+psycopg://class_records:CHANGE_ME@127.0.0.1:5432/class_records
 ROOT_PATH=/api
 CORS_ORIGINS=https://physics.lyxi.top
 ```
@@ -150,7 +144,44 @@ If the server has a poor GitHub connection, download the Miniforge `.sh` file on
 bash /tmp/Miniforge3-Linux-x86_64.sh -b -p /opt/class_records/miniforge
 ```
 
-### 2. Clone The Project
+### 2. Install PostgreSQL And Create The Database
+
+Install PostgreSQL on the server, or use a managed PostgreSQL instance. If you use BT Panel, you can create the PostgreSQL database/user from the panel UI when the PostgreSQL service is installed.
+
+Recommended database values:
+
+```text
+Database: class_records
+User: class_records
+Password: use a strong password
+Host: 127.0.0.1
+Port: 5432
+```
+
+Command-line example:
+
+```bash
+sudo -u postgres psql
+CREATE USER class_records WITH PASSWORD 'CHANGE_ME';
+CREATE DATABASE class_records OWNER class_records;
+\q
+```
+
+Verify the connection:
+
+```bash
+psql "postgresql://class_records:CHANGE_ME@127.0.0.1:5432/class_records" -c "select 1"
+```
+
+After backend dependencies are installed, you can also verify the app-level database setup:
+
+```bash
+cd /opt/class_records/app/backend
+export DATABASE_URL=postgresql+psycopg://class_records:CHANGE_ME@127.0.0.1:5432/class_records
+/opt/class_records/py311/bin/python scripts/check_database.py
+```
+
+### 3. Clone The Project
 
 ```bash
 id classrecords >/dev/null 2>&1 || useradd --system --home /opt/class_records --shell /sbin/nologin classrecords
@@ -163,7 +194,7 @@ else
 fi
 ```
 
-### 3. Install Backend Dependencies
+### 4. Install Backend Dependencies
 
 ```bash
 cd /opt/class_records/app/backend
@@ -179,15 +210,6 @@ cd /opt/class_records/app/backend
 /opt/class_records/py311/bin/python -m pip install -r requirements.txt
 ```
 
-### 4. Prepare Data Directory
-
-The SQLite database should live outside the source code checkout:
-
-```bash
-mkdir -p /opt/class_records/data
-chown -R classrecords:classrecords /opt/class_records/data
-```
-
 ### 5. Create Backend Env File
 
 ```bash
@@ -198,7 +220,7 @@ vi /etc/class-records.env
 For the current server, the file should be:
 
 ```text
-DATABASE_URL=sqlite:////opt/class_records/data/prod.db
+DATABASE_URL=postgresql+psycopg://class_records:CHANGE_ME@127.0.0.1:5432/class_records
 ROOT_PATH=/api
 CORS_ORIGINS=https://physics.lyxi.top
 ```
@@ -422,11 +444,12 @@ $env:DATABASE_URL="sqlite:///./dev.db"
 .\.venv\Scripts\python.exe scripts\seed_schedule.py
 ```
 
-Run on the server against the deployed SQLite database:
+Run on the server against the deployed PostgreSQL database:
 
 ```bash
 cd /opt/class_records/app/backend
-export DATABASE_URL=sqlite:////opt/class_records/data/prod.db
+export DATABASE_URL=postgresql+psycopg://class_records:CHANGE_ME@127.0.0.1:5432/class_records
+/opt/class_records/py311/bin/python scripts/check_database.py
 /opt/class_records/py311/bin/python scripts/seed_schedule.py
 systemctl restart class-records
 ```
@@ -435,7 +458,7 @@ If one period should count as 60 minutes instead of 45, run:
 
 ```bash
 cd /opt/class_records/app/backend
-export DATABASE_URL=sqlite:////opt/class_records/data/prod.db
+export DATABASE_URL=postgresql+psycopg://class_records:CHANGE_ME@127.0.0.1:5432/class_records
 /opt/class_records/py311/bin/python scripts/seed_schedule.py --duration-minutes 60
 systemctl restart class-records
 ```
@@ -476,7 +499,7 @@ grep -R "localhost:8000\|/api" -n /www/wwwroot/physics.lyxi.top/assets/*.js | he
 Database checks:
 
 ```bash
-ls -lh /opt/class_records/data
+psql "postgresql://class_records:CHANGE_ME@127.0.0.1:5432/class_records" -c "select now()"
 ```
 
 Disk checks:
@@ -519,32 +542,27 @@ Fix:
 /opt/class_records/py311/bin/python -m pip install -r requirements.txt
 ```
 
-### Backend Could Not Open SQLite Database
+### Backend Could Not Connect To PostgreSQL
 
 Error:
 
 ```text
-sqlite3.OperationalError: unable to open database file
+psycopg.OperationalError
 ```
 
-Cause: database path or permissions were wrong.
+Cause: database URL, credentials, or network access were wrong.
 
-Fix: use `/opt/class_records/data/prod.db` and make the directory writable:
-
-```bash
-mkdir -p /opt/class_records/data
-chown -R classrecords:classrecords /opt/class_records/data
-```
+Fix: verify `DATABASE_URL` in `/etc/class-records.env`, check that PostgreSQL is running, and confirm the app database/user exists.
 
 ### Database Or Disk Is Full
 
 Error:
 
 ```text
-sqlite3.OperationalError: database or disk is full
+database or disk is full
 ```
 
-Cause: server disk was full.
+Cause: server disk or PostgreSQL storage was full.
 
 Fix: free disk space, then restart:
 
@@ -604,14 +622,13 @@ Before serious use:
 ```text
 1. Keep HTTPS enabled in BT Panel.
 2. Add login or private access protection.
-3. Add automatic backups for /opt/class_records/data/prod.db.
-4. Consider PostgreSQL instead of SQLite for more durable server storage.
-5. Consider deploying on a newer OS than CentOS 7 later.
+3. Add automatic backups for PostgreSQL.
+4. Consider deploying on a newer OS than CentOS 7 later.
 ```
 
-Simple SQLite backup command:
+Simple PostgreSQL backup command:
 
 ```bash
 mkdir -p /opt/class_records/backups
-cp /opt/class_records/data/prod.db /opt/class_records/backups/prod-$(date +%F-%H%M%S).db
+PGPASSWORD=CHANGE_ME pg_dump -h 127.0.0.1 -U class_records -d class_records > /opt/class_records/backups/prod-$(date +%F-%H%M%S).sql
 ```

@@ -162,7 +162,8 @@ On the deployed server, run:
 
 ```bash
 cd /opt/class_records/app/backend
-export DATABASE_URL=sqlite:////opt/class_records/data/prod.db
+export DATABASE_URL=postgresql+psycopg://class_records:CHANGE_ME@127.0.0.1:5432/class_records
+/opt/class_records/py311/bin/python scripts/check_database.py
 /opt/class_records/py311/bin/python scripts/seed_schedule.py
 systemctl restart class-records
 ```
@@ -176,7 +177,7 @@ Domain: https://physics.lyxi.top
 Frontend root: /www/wwwroot/physics.lyxi.top
 Backend: FastAPI systemd service on 127.0.0.1:8000
 Reverse proxy: BT Panel routes /api to the backend
-Database: SQLite at /opt/class_records/data/prod.db
+Database: PostgreSQL
 ```
 
 Detailed deployment notes and recovery commands are in:
@@ -278,6 +279,7 @@ $env:DATABASE_URL="your_database_url_here"
 - Salary/counting should be based only on `ClassRecord` rows.
 - SQLite files such as `backend/dev.db` are local runtime data and ignored by Git.
 - Build output such as `frontend/dist` is ignored by Git.
+- Production deployment should use PostgreSQL; SQLite is only for local development.
 - This early version does not include migrations yet. If you changed schemas while using SQLite, remove `backend/dev.db` and restart the backend.
 
 ## Useful Commands

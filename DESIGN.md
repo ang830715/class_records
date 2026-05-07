@@ -47,8 +47,9 @@ Backend:
 - FastAPI (Python)
 
 Database:
-- PostgreSQL for normal usage
-- SQLite acceptable for local development
+- PostgreSQL for normal usage and production
+- SQLite acceptable for local development only
+- Production should stay on PostgreSQL so future multi-user support can rely on proper concurrent access, backups, and operational tooling
 
 Frontend:
 - React (Vite)
