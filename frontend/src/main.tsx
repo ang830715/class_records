@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   ClipboardList,
+  LogOut,
   Plus,
   RefreshCcw,
   Save,
@@ -14,7 +15,7 @@ import {
 } from "lucide-react";
 
 import { api } from "./api";
-import type { ClassRecord, ClassStatus, ScheduleRule, Stats, TeachingClass, TodayItem } from "./types";
+import type { ClassRecord, ClassStatus, ScheduleRule, Stats, TeachingClass, TodayItem, User } from "./types";
 import "./styles.css";
 
 type View = "today" | "records" | "stats" | "schedule";
@@ -126,6 +127,77 @@ function useAppData() {
 }
 
 function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    api.me()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setCheckingSession(false));
+  }, []);
+
+  if (checkingSession) {
+    return (
+      <main className="auth-shell">
+        <div className="loading">Checking your session...</div>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return <LoginView onLogin={setUser} />;
+  }
+
+  return <AuthenticatedApp user={user} onLogout={() => { api.setToken(null); setUser(null); }} />;
+}
+
+function LoginView({ onLogin }: { onLogin: (user: User) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.login(email, password);
+      api.setToken(result.access_token);
+      onLogin(result.user);
+    } catch (err) {
+      setError(err instanceof Error ? "Invalid email or password" : "Could not sign in");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="auth-shell">
+      <form className="login-panel" onSubmit={submit}>
+        <div>
+          <p className="eyebrow">Physics teaching log</p>
+          <h1>Teaching Records</h1>
+        </div>
+        <label className="field">
+          <span>Email</span>
+          <input className="control" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+        </label>
+        <label className="field">
+          <span>Password</span>
+          <input className="control" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+        </label>
+        {error && <div className="banner">{error}</div>}
+        <button className="icon-button primary" type="submit" disabled={busy || !email || !password}>
+          {busy ? "Signing in..." : "Sign in"}
+        </button>
+      </form>
+    </main>
+  );
+}
+
+function AuthenticatedApp({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [view, setView] = useState<View>("today");
   const appData = useAppData();
 
@@ -135,6 +207,7 @@ function App() {
         <div>
           <p className="eyebrow">Physics teaching log</p>
           <h1>Teaching Records</h1>
+          <p className="user-line">{user.name}</p>
         </div>
         <nav aria-label="Main">
           <NavButton active={view === "today"} icon={<ClipboardList />} label="Today" onClick={() => setView("today")} />
@@ -145,6 +218,10 @@ function App() {
         <button className="icon-button wide" onClick={() => appData.refresh()} title="Refresh">
           <RefreshCcw size={18} />
           Refresh
+        </button>
+        <button className="icon-button wide subtle" onClick={onLogout} title="Sign out">
+          <LogOut size={18} />
+          Sign out
         </button>
       </aside>
 

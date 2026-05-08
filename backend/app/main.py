@@ -8,13 +8,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, selectinload
 
+from .auth import authenticate_user, create_access_token, get_current_user, hash_password
 from .database import Base, engine, get_db
 from .models import ClassRecord, ClassStatus, EditLog, ScheduleRule, Semester, TeachingClass, User
+from .schema_management import ensure_runtime_columns
 from .schemas import (
+    AuthTokenRead,
     ClassRecordCreate,
     ClassRecordRead,
     ClassRecordUpdate,
     EditLogRead,
+    LoginRequest,
     ScheduleRuleCreate,
     ScheduleRuleRead,
     ScheduleRuleUpdate,
@@ -26,9 +30,11 @@ from .schemas import (
     TeachingClassRead,
     TeachingClassUpdate,
     TodayItem,
+    UserRead,
 )
 
 DbSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
 
 cors_origins = [
     origin.strip()
@@ -50,10 +56,39 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_runtime_columns(engine)
     with Session(engine) as db:
-        if db.get(User, 1) is None:
-            db.add(User(id=1, name="Teacher", email=None))
-            db.commit()
+        user = db.get(User, 1)
+        initial_email = getenv("INITIAL_ADMIN_EMAIL")
+        initial_password = getenv("INITIAL_ADMIN_PASSWORD")
+        initial_name = getenv("INITIAL_ADMIN_NAME", "Teacher")
+        if user is None:
+            user = User(id=1, name=initial_name, email=initial_email, is_active=True)
+            db.add(user)
+        else:
+            user.name = user.name or initial_name
+            if initial_email and not user.email:
+                user.email = initial_email
+        if initial_password and not user.password_hash:
+            user.password_hash = hash_password(initial_password)
+        db.commit()
+
+
+@app.post("/auth/login", response_model=AuthTokenRead)
+def login(payload: LoginRequest, db: DbSession) -> AuthTokenRead:
+    user = authenticate_user(db, payload.email, payload.password)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return AuthTokenRead(access_token=create_access_token(user), user=user)
+
+
+@app.get("/auth/me", response_model=UserRead)
+def me(current_user: CurrentUser) -> User:
+    return current_user
 
 
 def get_or_404(db: Session, model: type, item_id: int):
@@ -87,12 +122,12 @@ def health() -> dict[str, str]:
 
 
 @app.get("/classes", response_model=list[TeachingClassRead])
-def list_classes(db: DbSession) -> list[TeachingClass]:
+def list_classes(db: DbSession, current_user: CurrentUser) -> list[TeachingClass]:
     return list(db.scalars(select(TeachingClass).order_by(TeachingClass.name)))
 
 
 @app.post("/classes", response_model=TeachingClassRead, status_code=status.HTTP_201_CREATED)
-def create_class(payload: TeachingClassCreate, db: DbSession) -> TeachingClass:
+def create_class(payload: TeachingClassCreate, db: DbSession, current_user: CurrentUser) -> TeachingClass:
     item = TeachingClass(**payload.model_dump())
     db.add(item)
     db.commit()
@@ -101,7 +136,7 @@ def create_class(payload: TeachingClassCreate, db: DbSession) -> TeachingClass:
 
 
 @app.put("/classes/{class_id}", response_model=TeachingClassRead)
-def update_class(class_id: int, payload: TeachingClassUpdate, db: DbSession) -> TeachingClass:
+def update_class(class_id: int, payload: TeachingClassUpdate, db: DbSession, current_user: CurrentUser) -> TeachingClass:
     item = get_or_404(db, TeachingClass, class_id)
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(item, key, value)
@@ -111,30 +146,34 @@ def update_class(class_id: int, payload: TeachingClassUpdate, db: DbSession) -> 
 
 
 @app.delete("/classes/{class_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_class(class_id: int, db: DbSession) -> None:
+def delete_class(class_id: int, db: DbSession, current_user: CurrentUser) -> None:
     db.delete(get_or_404(db, TeachingClass, class_id))
     db.commit()
 
 
 @app.get("/schedule", response_model=list[ScheduleRuleRead])
-def list_schedule(db: DbSession, user_id: int = 1) -> list[ScheduleRule]:
-    return list(db.scalars(schedule_query(user_id)))
+def list_schedule(db: DbSession, current_user: CurrentUser) -> list[ScheduleRule]:
+    return list(db.scalars(schedule_query(current_user.id)))
 
 
 @app.post("/schedule", response_model=ScheduleRuleRead, status_code=status.HTTP_201_CREATED)
-def create_schedule_rule(payload: ScheduleRuleCreate, db: DbSession) -> ScheduleRule:
+def create_schedule_rule(payload: ScheduleRuleCreate, db: DbSession, current_user: CurrentUser) -> ScheduleRule:
     if payload.active_until and payload.active_until < payload.active_from:
         raise HTTPException(status_code=400, detail="active_until must be after active_from")
     get_or_404(db, TeachingClass, payload.teaching_class_id)
-    item = ScheduleRule(**payload.model_dump())
+    values = payload.model_dump()
+    values["user_id"] = current_user.id
+    item = ScheduleRule(**values)
     db.add(item)
     db.commit()
     return get_or_404(db, ScheduleRule, item.id)
 
 
 @app.put("/schedule/{rule_id}", response_model=ScheduleRuleRead)
-def update_schedule_rule(rule_id: int, payload: ScheduleRuleUpdate, db: DbSession) -> ScheduleRule:
+def update_schedule_rule(rule_id: int, payload: ScheduleRuleUpdate, db: DbSession, current_user: CurrentUser) -> ScheduleRule:
     item = get_or_404(db, ScheduleRule, rule_id)
+    if item.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     values = payload.model_dump(exclude_unset=True)
     if "teaching_class_id" in values and values["teaching_class_id"] is not None:
         get_or_404(db, TeachingClass, values["teaching_class_id"])
@@ -149,19 +188,22 @@ def update_schedule_rule(rule_id: int, payload: ScheduleRuleUpdate, db: DbSessio
 
 
 @app.delete("/schedule/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_schedule_rule(rule_id: int, db: DbSession) -> None:
-    db.delete(get_or_404(db, ScheduleRule, rule_id))
+def delete_schedule_rule(rule_id: int, db: DbSession, current_user: CurrentUser) -> None:
+    item = get_or_404(db, ScheduleRule, rule_id)
+    if item.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    db.delete(item)
     db.commit()
 
 
 @app.get("/records", response_model=list[ClassRecordRead])
 def list_records(
     db: DbSession,
-    user_id: int = 1,
+    current_user: CurrentUser,
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> list[ClassRecord]:
-    query = record_query(user_id)
+    query = record_query(current_user.id)
     if start_date:
         query = query.where(ClassRecord.date >= start_date)
     if end_date:
@@ -170,20 +212,32 @@ def list_records(
 
 
 @app.post("/records", response_model=ClassRecordRead, status_code=status.HTTP_201_CREATED)
-def create_record(payload: ClassRecordCreate, db: DbSession) -> ClassRecord:
+def create_record(payload: ClassRecordCreate, db: DbSession, current_user: CurrentUser) -> ClassRecord:
     get_or_404(db, TeachingClass, payload.teaching_class_id)
-    item = ClassRecord(**payload.model_dump())
+    if payload.schedule_rule_id is not None:
+        rule = get_or_404(db, ScheduleRule, payload.schedule_rule_id)
+        if rule.user_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    values = payload.model_dump()
+    values["user_id"] = current_user.id
+    item = ClassRecord(**values)
     db.add(item)
     db.commit()
     return get_or_404(db, ClassRecord, item.id)
 
 
 @app.put("/records/{record_id}", response_model=ClassRecordRead)
-def update_record(record_id: int, payload: ClassRecordUpdate, db: DbSession) -> ClassRecord:
+def update_record(record_id: int, payload: ClassRecordUpdate, db: DbSession, current_user: CurrentUser) -> ClassRecord:
     item = get_or_404(db, ClassRecord, record_id)
+    if item.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     values = payload.model_dump(exclude_unset=True)
     if "teaching_class_id" in values and values["teaching_class_id"] is not None:
         get_or_404(db, TeachingClass, values["teaching_class_id"])
+    if "schedule_rule_id" in values and values["schedule_rule_id"] is not None:
+        rule = get_or_404(db, ScheduleRule, values["schedule_rule_id"])
+        if rule.user_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     for key, value in values.items():
         old_value = getattr(item, key)
         if old_value != value:
@@ -201,20 +255,26 @@ def update_record(record_id: int, payload: ClassRecordUpdate, db: DbSession) -> 
 
 
 @app.delete("/records/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_record(record_id: int, db: DbSession) -> None:
-    db.delete(get_or_404(db, ClassRecord, record_id))
+def delete_record(record_id: int, db: DbSession, current_user: CurrentUser) -> None:
+    item = get_or_404(db, ClassRecord, record_id)
+    if item.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    db.delete(item)
     db.commit()
 
 
 @app.get("/records/{record_id}/edits", response_model=list[EditLogRead])
-def list_record_edits(record_id: int, db: DbSession) -> list[EditLog]:
-    get_or_404(db, ClassRecord, record_id)
+def list_record_edits(record_id: int, db: DbSession, current_user: CurrentUser) -> list[EditLog]:
+    record = get_or_404(db, ClassRecord, record_id)
+    if record.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     return list(db.scalars(select(EditLog).where(EditLog.record_id == record_id).order_by(EditLog.edited_at.desc())))
 
 
 @app.get("/today", response_model=list[TodayItem])
-def today(db: DbSession, target_date: date | None = None, user_id: int = 1) -> list[TodayItem]:
+def today(db: DbSession, current_user: CurrentUser, target_date: date | None = None) -> list[TodayItem]:
     target = target_date or date.today()
+    user_id = current_user.id
     schedules = list(
         db.scalars(
             schedule_query(user_id)
@@ -247,10 +307,11 @@ def today(db: DbSession, target_date: date | None = None, user_id: int = 1) -> l
 @app.get("/missing-days", response_model=list[date])
 def missing_days(
     db: DbSession,
+    current_user: CurrentUser,
     start_date: date = Query(...),
     end_date: date = Query(...),
-    user_id: int = 1,
 ) -> list[date]:
+    user_id = current_user.id
     if end_date < start_date:
         raise HTTPException(status_code=400, detail="end_date must be after start_date")
     rules = list(db.scalars(schedule_query(user_id).where(ScheduleRule.is_active.is_(True))))
@@ -282,12 +343,13 @@ def missing_days(
 @app.get("/stats", response_model=StatsRead)
 def stats(
     db: DbSession,
+    current_user: CurrentUser,
     range: str = Query(default="month", pattern="^(week|month|semester|custom)$"),
     start_date: date | None = None,
     end_date: date | None = None,
     semester_id: int | None = None,
-    user_id: int = 1,
 ) -> StatsRead:
+    user_id = current_user.id
     today_date = date.today()
     if range == "week":
         start = today_date - timedelta(days=today_date.weekday())
@@ -367,12 +429,12 @@ def stats(
 
 
 @app.get("/semesters", response_model=list[SemesterRead])
-def list_semesters(db: DbSession) -> list[Semester]:
+def list_semesters(db: DbSession, current_user: CurrentUser) -> list[Semester]:
     return list(db.scalars(select(Semester).order_by(Semester.start_date.desc())))
 
 
 @app.post("/semesters", response_model=SemesterRead, status_code=status.HTTP_201_CREATED)
-def create_semester(payload: SemesterCreate, db: DbSession) -> Semester:
+def create_semester(payload: SemesterCreate, db: DbSession, current_user: CurrentUser) -> Semester:
     if payload.end_date < payload.start_date:
         raise HTTPException(status_code=400, detail="end_date must be after start_date")
     item = Semester(**payload.model_dump())

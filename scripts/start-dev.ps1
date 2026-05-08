@@ -39,7 +39,7 @@ if (Test-Url "http://localhost:8000/health") {
   Write-Host "Backend already running: http://localhost:8000"
 } else {
   $backendDb = (Join-Path $backend "dev.db").Replace("\", "/")
-  $backendCommand = "`$env:DATABASE_URL='sqlite:///$backendDb'; & '$python' -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
+  $backendCommand = "`$env:DATABASE_URL='sqlite:///$backendDb'; `$env:AUTH_SECRET='local-dev-secret-change-me'; `$env:INITIAL_ADMIN_EMAIL='teacher@example.com'; `$env:INITIAL_ADMIN_PASSWORD='teacher'; `$env:INITIAL_ADMIN_NAME='Teacher'; & '$python' -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
   $backendProcess = Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $backendCommand) -WorkingDirectory $backend -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDir "backend.out.log") -RedirectStandardError (Join-Path $logDir "backend.err.log") -PassThru
   $backendProcess.Id | Set-Content -Path (Join-Path $logDir "backend.pid")
   Write-Host "Started backend: http://localhost:8000"

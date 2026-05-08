@@ -1,5 +1,19 @@
 ﻿export type ClassStatus = "taught" | "canceled" | "rescheduled" | "extra" | "pending";
 
+export interface User {
+  id: number;
+  name: string;
+  email?: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AuthToken {
+  access_token: string;
+  token_type: "bearer";
+  user: User;
+}
+
 export interface TeachingClass {
   id: number;
   name: string;

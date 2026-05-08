@@ -42,6 +42,12 @@ select {
   letter-spacing: 0;
 }
 
+.user-line {
+  margin: 8px 0 0;
+  color: #dce7e3;
+  font-weight: 700;
+}
+
 .eyebrow {
   margin: 0 0 6px;
   color: #7b8a4e;
@@ -101,6 +107,14 @@ nav {
   margin-top: auto;
 }
 
+.sidebar .icon-button.wide {
+  margin-top: 0;
+}
+
+.sidebar nav + .icon-button.wide {
+  margin-top: auto;
+}
+
 .icon-button.primary {
   color: white;
   background: #2f6f73;
@@ -124,6 +138,30 @@ nav {
 .workspace {
   min-width: 0;
   padding: 30px;
+}
+
+.auth-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: #f5f2ea;
+}
+
+.login-panel {
+  display: grid;
+  gap: 18px;
+  width: min(420px, 100%);
+  border: 1px solid #dce3df;
+  border-radius: 8px;
+  padding: 24px;
+  background: white;
+}
+
+.login-panel h1 {
+  margin: 0;
+  color: #1d2528;
+  font-size: 1.8rem;
 }
 
 .view {

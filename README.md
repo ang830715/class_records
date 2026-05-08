@@ -186,7 +186,7 @@ Detailed deployment notes and recovery commands are in:
 deploy/README.md
 ```
 
-Important: the deployed app currently has HTTPS, but no login system yet.
+Important: the deployed app has app-level login. Keep `AUTH_SECRET` and `INITIAL_ADMIN_PASSWORD` private.
 
 ## Quick Start With SQLite
 
@@ -210,6 +210,10 @@ Start the backend:
 
 ```powershell
 $env:DATABASE_URL="sqlite:///./dev.db"
+$env:AUTH_SECRET="local-dev-secret-change-me"
+$env:INITIAL_ADMIN_EMAIL="teacher@example.com"
+$env:INITIAL_ADMIN_PASSWORD="teacher"
+$env:INITIAL_ADMIN_NAME="Teacher"
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
@@ -225,6 +229,21 @@ Open:
 
 ```text
 http://localhost:5173
+```
+
+Default local development login from the commands above or `scripts/start-dev.ps1`:
+
+```text
+Email: teacher@example.com
+Password: teacher
+```
+
+Reset the admin login if needed:
+
+```powershell
+cd backend
+$env:DATABASE_URL="sqlite:///./dev.db"
+.\.venv\Scripts\python.exe scripts\set_admin_password.py --email teacher@example.com
 ```
 
 API docs:

@@ -11,10 +11,12 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from app.database import Base, DATABASE_URL, engine  # noqa: E402
 from app import models  # noqa: E402,F401
+from app.schema_management import ensure_runtime_columns  # noqa: E402
 
 
 def main() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_runtime_columns(engine)
     with Session(engine) as db:
         db.execute(text("select 1"))
 

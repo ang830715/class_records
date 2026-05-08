@@ -1,13 +1,16 @@
 ﻿import type {
+  AuthToken,
   ClassRecord,
   ScheduleRule,
   Semester,
   Stats,
   TeachingClass,
   TodayItem,
+  User,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
+const AUTH_TOKEN_KEY = "teaching-records-token";
 
 type StatsRange = "week" | "month" | "semester" | "custom";
 
@@ -19,13 +22,18 @@ interface StatsParams {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
     ...init,
   });
+  if (response.status === 401) {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || `Request failed: ${response.status}`);
@@ -37,6 +45,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  setToken: (token: string | null) => {
+    if (token) {
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+  },
+  login: (email: string, password: string) =>
+    request<AuthToken>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  me: () => request<User>("/auth/me"),
+
   classes: () => request<TeachingClass[]>("/classes"),
   createClass: (body: Partial<TeachingClass>) =>
     request<TeachingClass>("/classes", { method: "POST", body: JSON.stringify(body) }),

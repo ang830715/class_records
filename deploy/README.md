@@ -15,7 +15,7 @@ Browser API calls
   -> FastAPI writes to PostgreSQL
 ```
 
-Important: SSL is now handled by BT Panel. The app still has no login. Anyone who can access the domain can edit the records until access protection or authentication is added.
+Important: SSL is now handled by BT Panel. The app also has password login. Keep `/etc/class-records.env` private because it contains the auth secret and initial admin password.
 
 ## Server Facts
 
@@ -101,6 +101,11 @@ The server file `/etc/class-records.env` should contain:
 DATABASE_URL=postgresql+psycopg://class_records:CHANGE_ME@127.0.0.1:5432/class_records
 ROOT_PATH=/api
 CORS_ORIGINS=https://physics.lyxi.top
+AUTH_SECRET=replace-with-a-long-random-secret
+INITIAL_ADMIN_EMAIL=teacher@example.com
+INITIAL_ADMIN_PASSWORD=replace-with-a-strong-password
+INITIAL_ADMIN_NAME=Teacher
+AUTH_TOKEN_TTL_HOURS=168
 ```
 
 If deploying somewhere else later, change `CORS_ORIGINS` to the real domain, for example:
@@ -223,6 +228,26 @@ For the current server, the file should be:
 DATABASE_URL=postgresql+psycopg://class_records:CHANGE_ME@127.0.0.1:5432/class_records
 ROOT_PATH=/api
 CORS_ORIGINS=https://physics.lyxi.top
+AUTH_SECRET=replace-with-a-long-random-secret
+INITIAL_ADMIN_EMAIL=teacher@example.com
+INITIAL_ADMIN_PASSWORD=replace-with-a-strong-password
+INITIAL_ADMIN_NAME=Teacher
+AUTH_TOKEN_TTL_HOURS=168
+```
+
+Generate a strong `AUTH_SECRET` on the server with:
+
+```bash
+/opt/class_records/py311/bin/python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+If you ever need to reset the app login:
+
+```bash
+cd /opt/class_records/app/backend
+export DATABASE_URL=postgresql+psycopg://class_records:CHANGE_ME@127.0.0.1:5432/class_records
+/opt/class_records/py311/bin/python scripts/set_admin_password.py --email teacher@example.com
+systemctl restart class-records
 ```
 
 In `vi`:
@@ -621,7 +646,7 @@ Before serious use:
 
 ```text
 1. Keep HTTPS enabled in BT Panel.
-2. Add login or private access protection.
+2. Keep a strong AUTH_SECRET and admin password in /etc/class-records.env.
 3. Add automatic backups for PostgreSQL.
 4. Consider deploying on a newer OS than CentOS 7 later.
 ```
