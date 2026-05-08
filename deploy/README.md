@@ -17,6 +17,14 @@ Browser API calls
 
 Important: SSL is now handled by BT Panel. The app also has password login. Keep `/etc/class-records.env` private because it contains the auth secret and initial admin password.
 
+Current auth implementation:
+
+```text
+POST /auth/login returns a signed bearer token.
+The browser stores the token and sends Authorization: Bearer <token>.
+Most API routes require that token.
+```
+
 ## Server Facts
 
 The first successful server was:
@@ -64,6 +72,17 @@ deploy/class-records.env.example
 deploy/systemd/class-records.service
 deploy/nginx/class-records.conf
 deploy/README.md
+```
+
+Authentication/account files now include:
+
+```text
+backend/app/auth.py
+backend/app/schema_management.py
+backend/scripts/check_database.py
+backend/scripts/set_admin_password.py
+frontend/src/api.ts
+frontend/src/main.tsx
 ```
 
 ## Server Directory Layout
@@ -389,8 +408,9 @@ Test API through Nginx:
 
 ```text
 https://physics.lyxi.top/api/health
-https://physics.lyxi.top/api/classes
 ```
+
+`/api/classes` and most other app routes now require login, so they should return `401` without a bearer token.
 
 ## Updating The App Later
 
@@ -406,6 +426,8 @@ git pull --ff-only
 ### 2. Restart Backend If Backend Code Changed
 
 ```bash
+cd /opt/class_records/app/backend
+/opt/class_records/py311/bin/python scripts/check_database.py
 systemctl restart class-records
 systemctl status class-records --no-pager
 ```
@@ -502,7 +524,22 @@ Backend direct tests:
 
 ```bash
 curl -s http://127.0.0.1:8000/health
-curl -s http://127.0.0.1:8000/classes
+curl -i http://127.0.0.1:8000/classes
+```
+
+Expected:
+
+```text
+/health returns 200 OK
+/classes returns 401 Unauthorized unless you pass a bearer token
+```
+
+Login test:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"teacher@example.com","password":"YOUR_PASSWORD"}'
 ```
 
 Nginx tests:
@@ -525,6 +562,8 @@ Database checks:
 
 ```bash
 psql "postgresql://class_records:CHANGE_ME@127.0.0.1:5432/class_records" -c "select now()"
+cd /opt/class_records/app/backend
+/opt/class_records/py311/bin/python scripts/check_database.py
 ```
 
 Disk checks:
@@ -648,7 +687,9 @@ Before serious use:
 1. Keep HTTPS enabled in BT Panel.
 2. Keep a strong AUTH_SECRET and admin password in /etc/class-records.env.
 3. Add automatic backups for PostgreSQL.
-4. Consider deploying on a newer OS than CentOS 7 later.
+4. Add Alembic migrations before larger schema changes.
+5. Consider HttpOnly cookie sessions instead of localStorage bearer tokens.
+6. Consider deploying on a newer OS than CentOS 7 later.
 ```
 
 Simple PostgreSQL backup command:

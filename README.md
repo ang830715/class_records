@@ -6,6 +6,8 @@ The key rule is simple: **`ClassRecord` is the source of truth**. Schedule rules
 
 ## Features
 
+- Password login with signed bearer tokens
+- Account page for updating display name, email, and password
 - Manage teaching classes such as `PA4`
 - Store each class's usual classroom and notes
 - Define recurring weekly schedule rules by class, weekday, and time
@@ -27,6 +29,19 @@ The key rule is simple: **`ClassRecord` is the source of truth**. Schedule rules
 - Database: PostgreSQL for normal deployment; SQLite is convenient for local development
 - Frontend: React, TypeScript, Vite
 - UI: plain CSS with lucide-react icons
+- Authentication: password hash stored on `User`, signed bearer token from `AUTH_SECRET`
+
+## Current State
+
+As of the latest local work:
+
+- Production is intended to use PostgreSQL.
+- Local development uses SQLite through `scripts/start-dev.ps1`.
+- App routes are protected by login except `/health`, `/auth/login`, and `/auth/me` when checking an existing token.
+- The frontend includes **Today**, **Records**, **Stats**, **Schedule**, and **Account** views.
+- The first/default user is still `User(id=1)`; future multi-user support should build from the current `current_user.id` route wiring.
+- There are no Alembic migrations yet. `backend/app/schema_management.py` contains a small runtime compatibility helper for the new auth columns.
+- The latest high-level handoff is in `PROJECT_STATE.md`.
 
 ## Core Data Model
 
@@ -60,12 +75,16 @@ ClassRecord
 class_records/
   backend/
     app/
+      auth.py
       database.py
       main.py
       models.py
+      schema_management.py
       schemas.py
     scripts/
+      check_database.py
       seed_schedule.py
+      set_admin_password.py
     requirements.txt
   deploy/
     README.md
@@ -81,6 +100,7 @@ class_records/
     package.json
   docker-compose.yml
   DESIGN.md
+  PROJECT_STATE.md
   README.md
 ```
 
@@ -151,6 +171,17 @@ Account management:
 1. Open **Account** after signing in.
 2. Update your display name or email.
 3. Change your password by entering the current password and the new password.
+
+Authentication notes:
+
+```text
+POST /auth/login    returns a signed bearer token
+GET /auth/me        returns the logged-in user
+PUT /auth/me        updates display name and email
+PUT /auth/password  changes password
+```
+
+The token is stored in browser `localStorage` by the current frontend. This is a simple first auth layer; a future hardening step would be HttpOnly cookie sessions.
 
 ## Real Schedule Seed
 
@@ -302,6 +333,7 @@ $env:DATABASE_URL="your_database_url_here"
 - Generated schedule records are not stored in the database.
 - `/today` merges dynamic schedule expectations with actual records.
 - Salary/counting should be based only on `ClassRecord` rows.
+- Most app API routes use the logged-in `current_user.id`; the frontend should not send or choose `user_id`.
 - SQLite files such as `backend/dev.db` are local runtime data and ignored by Git.
 - Build output such as `frontend/dist` is ignored by Git.
 - Production deployment should use PostgreSQL; SQLite is only for local development.
@@ -319,7 +351,7 @@ npm.cmd run build
 Check backend Python syntax:
 
 ```powershell
-python -m compileall backend\app
+python -m compileall backend\app backend\scripts
 ```
 
 Stop local PostgreSQL:

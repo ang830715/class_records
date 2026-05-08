@@ -10,6 +10,8 @@ Supports:
 - Schedule vs actual comparison
 - Weekly/monthly/semester statistics
 - Manual corrections with audit trail
+- Password login
+- Account profile and password updates
 - Multi-device usage through a web/PWA-style interface
 
 Future: multi-user teachers.
@@ -35,6 +37,9 @@ The daily class information should match real life:
 
 ### Auditability
 All record edits must be traceable.
+
+### Authentication Boundary
+The browser must authenticate before reading or changing app data. Backend routes should derive the active teacher from `current_user.id`, not from client-supplied `user_id`.
 
 ### Simplicity
 Monolithic backend, no microservices.
@@ -65,6 +70,8 @@ Architecture:
 - id
 - name
 - email
+- password_hash
+- is_active
 - created_at
 
 ---
@@ -133,6 +140,14 @@ Architecture:
 
 ## 5. Key Logic
 
+### Authentication
+- `POST /auth/login` verifies email/password and returns a signed bearer token.
+- Tokens are signed with `AUTH_SECRET` and expire according to `AUTH_TOKEN_TTL_HOURS`.
+- Passwords are stored as PBKDF2-SHA256 hashes.
+- The first admin user is initialized from `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD`, and `INITIAL_ADMIN_NAME`.
+- `PUT /auth/me` updates name/email.
+- `PUT /auth/password` changes the current user's password after checking the current password.
+
 ### Daily Generation
 DO NOT store generated schedule records.
 Generate expected classes dynamically.
@@ -154,6 +169,14 @@ Salary can be derived later from ClassRecord if a rate model is added.
 
 ## 6. API Design
 
+### Auth / Account
+POST /auth/login
+GET /auth/me
+PUT /auth/me
+PUT /auth/password
+
+---
+
 ### Classes
 GET /classes
 POST /classes
@@ -168,6 +191,8 @@ POST /schedule
 PUT /schedule/{id}
 DELETE /schedule/{id}
 
+All schedule routes are scoped by the logged-in user's id.
+
 ---
 
 ### Records
@@ -175,6 +200,8 @@ GET /records
 POST /records
 PUT /records/{id}
 DELETE /records/{id}
+
+All record routes are scoped by the logged-in user's id.
 
 ---
 
@@ -220,6 +247,15 @@ GET /stats?range=semester
 
 ---
 
+### Account
+- View signed-in user
+- Update display name
+- Update email
+- Change password
+- Sign out
+
+---
+
 ## 8. Workflow
 
 Daily:
@@ -243,15 +279,28 @@ Daily:
 ## 10. Non-Goals
 
 - microservices
-- complex permissions
+- complex permissions in the current single-teacher release
 - real-time sync
 - full school/student CRM
 
 ---
 
-## 11. Success Criteria
+## 11. Current Technical Notes
+
+- Production database target is PostgreSQL.
+- Local development can use SQLite.
+- No Alembic migrations are present yet.
+- `backend/app/schema_management.py` currently handles runtime addition of auth columns for older databases.
+- `TeachingClass` is still global, while `ScheduleRule` and `ClassRecord` are user-scoped.
+- True multi-user support should decide whether classes remain shared or become per-user.
+
+---
+
+## 12. Success Criteria
 
 - <1 min daily logging
 - accurate taught class count
 - easy correction
 - low mental load during a teaching day
+- login protects production data
+- account changes can be done from the web UI
