@@ -11,6 +11,7 @@ import {
   Save,
   Settings,
   Trash2,
+  UserCircle,
   X,
 } from "lucide-react";
 
@@ -18,7 +19,7 @@ import { api } from "./api";
 import type { ClassRecord, ClassStatus, ScheduleRule, Stats, TeachingClass, TodayItem, User } from "./types";
 import "./styles.css";
 
-type View = "today" | "records" | "stats" | "schedule";
+type View = "today" | "records" | "stats" | "schedule" | "account";
 type StatsMode = "week" | "month" | "salary" | "custom";
 
 const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -149,7 +150,7 @@ function App() {
     return <LoginView onLogin={setUser} />;
   }
 
-  return <AuthenticatedApp user={user} onLogout={() => { api.setToken(null); setUser(null); }} />;
+  return <AuthenticatedApp user={user} onUserChange={setUser} onLogout={() => { api.setToken(null); setUser(null); }} />;
 }
 
 function LoginView({ onLogin }: { onLogin: (user: User) => void }) {
@@ -197,7 +198,7 @@ function LoginView({ onLogin }: { onLogin: (user: User) => void }) {
   );
 }
 
-function AuthenticatedApp({ user, onLogout }: { user: User; onLogout: () => void }) {
+function AuthenticatedApp({ user, onUserChange, onLogout }: { user: User; onUserChange: (user: User) => void; onLogout: () => void }) {
   const [view, setView] = useState<View>("today");
   const appData = useAppData();
 
@@ -214,6 +215,7 @@ function AuthenticatedApp({ user, onLogout }: { user: User; onLogout: () => void
           <NavButton active={view === "records"} icon={<CalendarDays />} label="Records" onClick={() => setView("records")} />
           <NavButton active={view === "stats"} icon={<BarChart3 />} label="Stats" onClick={() => setView("stats")} />
           <NavButton active={view === "schedule"} icon={<Settings />} label="Schedule" onClick={() => setView("schedule")} />
+          <NavButton active={view === "account"} icon={<UserCircle />} label="Account" onClick={() => setView("account")} />
         </nav>
         <button className="icon-button wide" onClick={() => appData.refresh()} title="Refresh">
           <RefreshCcw size={18} />
@@ -235,6 +237,7 @@ function AuthenticatedApp({ user, onLogout }: { user: User; onLogout: () => void
             {view === "records" && <RecordsView {...appData} />}
             {view === "stats" && <StatsView />}
             {view === "schedule" && <ScheduleView {...appData} />}
+            {view === "account" && <AccountView user={user} onUserChange={onUserChange} onLogout={onLogout} />}
           </>
         )}
       </section>
@@ -248,6 +251,114 @@ function NavButton({ active, icon, label, onClick }: { active: boolean; icon: Re
       {icon}
       {label}
     </button>
+  );
+}
+
+function AccountView({ user, onUserChange, onLogout }: { user: User; onUserChange: (user: User) => void; onLogout: () => void }) {
+  const [profile, setProfile] = useState({ name: user.name, email: user.email ?? "" });
+  const [passwords, setPasswords] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setProfile({ name: user.name, email: user.email ?? "" });
+  }, [user]);
+
+  async function saveProfile(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setProfileMessage(null);
+    try {
+      const updated = await api.updateMe({ name: profile.name.trim(), email: profile.email.trim() });
+      onUserChange(updated);
+      setProfileMessage("Account updated.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update account");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function savePassword(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setPasswordMessage(null);
+    if (passwords.new_password !== passwords.confirm_password) {
+      setError("New passwords do not match");
+      setBusy(false);
+      return;
+    }
+    try {
+      await api.updatePassword({
+        current_password: passwords.current_password,
+        new_password: passwords.new_password,
+      });
+      setPasswords({ current_password: "", new_password: "", confirm_password: "" });
+      setPasswordMessage("Password changed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not change password");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="view">
+      <header className="view-header">
+        <div>
+          <p className="eyebrow">Signed in</p>
+          <h2>Account</h2>
+          <p className="date-heading">{user.email}</p>
+        </div>
+        <button className="icon-button subtle" type="button" onClick={onLogout}>
+          <LogOut size={18} />
+          Sign out
+        </button>
+      </header>
+      {error && <div className="banner">{error}</div>}
+      <div className="account-grid">
+        <form className="account-panel" onSubmit={saveProfile}>
+          <h3 className="form-title">Profile</h3>
+          <label className="field">
+            <span>Name</span>
+            <input className="control" value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>Email</span>
+            <input className="control" type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
+          </label>
+          {profileMessage && <div className="success-banner">{profileMessage}</div>}
+          <button className="icon-button primary" type="submit" disabled={busy || !profile.name.trim() || !profile.email.trim()}>
+            <Save size={18} />
+            Save profile
+          </button>
+        </form>
+        <form className="account-panel" onSubmit={savePassword}>
+          <h3 className="form-title">Password</h3>
+          <label className="field">
+            <span>Current password</span>
+            <input className="control" type="password" autoComplete="current-password" value={passwords.current_password} onChange={(event) => setPasswords({ ...passwords, current_password: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>New password</span>
+            <input className="control" type="password" autoComplete="new-password" value={passwords.new_password} onChange={(event) => setPasswords({ ...passwords, new_password: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>Confirm password</span>
+            <input className="control" type="password" autoComplete="new-password" value={passwords.confirm_password} onChange={(event) => setPasswords({ ...passwords, confirm_password: event.target.value })} />
+          </label>
+          {passwordMessage && <div className="success-banner">{passwordMessage}</div>}
+          <button className="icon-button primary" type="submit" disabled={busy || !passwords.current_password || passwords.new_password.length < 8 || !passwords.confirm_password}>
+            <Save size={18} />
+            Change password
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 

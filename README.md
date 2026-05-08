@@ -146,6 +146,12 @@ Schedule setup:
 2. Add recurring weekly lessons in **Add weekly lesson**.
 3. Use `P1`, `P2`, etc. in **Period / notes** when the note is a period label.
 
+Account management:
+
+1. Open **Account** after signing in.
+2. Update your display name or email.
+3. Change your password by entering the current password and the new password.
+
 ## Real Schedule Seed
 
 The real weekly timetable can be inserted with:

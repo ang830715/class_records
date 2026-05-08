@@ -55,6 +55,10 @@ export const api = {
   login: (email: string, password: string) =>
     request<AuthToken>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => request<User>("/auth/me"),
+  updateMe: (body: { name: string; email: string }) =>
+    request<User>("/auth/me", { method: "PUT", body: JSON.stringify(body) }),
+  updatePassword: (body: { current_password: string; new_password: string }) =>
+    request<void>("/auth/password", { method: "PUT", body: JSON.stringify(body) }),
 
   classes: () => request<TeachingClass[]>("/classes"),
   createClass: (body: Partial<TeachingClass>) =>

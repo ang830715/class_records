@@ -31,6 +31,16 @@ class AuthTokenRead(BaseModel):
     user: UserRead
 
 
+class AccountUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    email: str = Field(min_length=3, max_length=255)
+
+
+class PasswordUpdate(BaseModel):
+    current_password: str = Field(min_length=1, max_length=255)
+    new_password: str = Field(min_length=8, max_length=255)
+
+
 class TeachingClassBase(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     classroom: str | None = Field(default=None, max_length=120)

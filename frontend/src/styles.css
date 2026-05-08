@@ -214,6 +214,7 @@ nav {
 }
 
 .banner,
+.success-banner,
 .loading,
 .empty,
 .summary-strip {
@@ -221,6 +222,12 @@ nav {
   border-radius: 8px;
   padding: 14px 16px;
   background: #fffaf0;
+}
+
+.success-banner {
+  border-color: #b9dcc5;
+  color: #155f37;
+  background: #e8f7ed;
 }
 
 .loading.small {
@@ -392,6 +399,22 @@ nav {
   gap: 12px;
 }
 
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.account-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  border: 1px solid #dce3df;
+  border-radius: 8px;
+  padding: 16px;
+  background: white;
+}
+
 .table-wrap {
   overflow: auto;
   border: 1px solid #dce3df;
@@ -540,6 +563,7 @@ th {
   }
 
   .setup-grid,
+  .account-grid,
   .metrics {
     grid-template-columns: 1fr;
   }

@@ -8,17 +8,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from .auth import authenticate_user, create_access_token, get_current_user, hash_password
+from .auth import authenticate_user, create_access_token, get_current_user, hash_password, verify_password
 from .database import Base, engine, get_db
 from .models import ClassRecord, ClassStatus, EditLog, ScheduleRule, Semester, TeachingClass, User
 from .schema_management import ensure_runtime_columns
 from .schemas import (
+    AccountUpdate,
     AuthTokenRead,
     ClassRecordCreate,
     ClassRecordRead,
     ClassRecordUpdate,
     EditLogRead,
     LoginRequest,
+    PasswordUpdate,
     ScheduleRuleCreate,
     ScheduleRuleRead,
     ScheduleRuleUpdate,
@@ -89,6 +91,27 @@ def login(payload: LoginRequest, db: DbSession) -> AuthTokenRead:
 @app.get("/auth/me", response_model=UserRead)
 def me(current_user: CurrentUser) -> User:
     return current_user
+
+
+@app.put("/auth/me", response_model=UserRead)
+def update_me(payload: AccountUpdate, db: DbSession, current_user: CurrentUser) -> User:
+    next_email = payload.email.strip().lower()
+    existing = db.scalar(select(User).where(func.lower(User.email) == next_email, User.id != current_user.id))
+    if existing is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is already in use")
+    current_user.name = payload.name.strip()
+    current_user.email = next_email
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@app.put("/auth/password", status_code=status.HTTP_204_NO_CONTENT)
+def update_password(payload: PasswordUpdate, db: DbSession, current_user: CurrentUser) -> None:
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+    current_user.password_hash = hash_password(payload.new_password)
+    db.commit()
 
 
 def get_or_404(db: Session, model: type, item_id: int):
