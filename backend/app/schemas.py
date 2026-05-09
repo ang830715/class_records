@@ -97,6 +97,21 @@ class ScheduleRuleRead(ScheduleRuleBase):
     teaching_class: TeachingClassRead
 
 
+class ScheduleImportCandidate(BaseModel):
+    weekday: int = Field(ge=0, le=6)
+    period: str | None = Field(default=None, max_length=20)
+    start_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+    end_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+    duration_minutes: int = Field(gt=0, le=480)
+    class_name: str = Field(min_length=1, max_length=160)
+    notes: str | None = None
+    confidence: float = Field(ge=0, le=1)
+
+
+class ScheduleImportResult(BaseModel):
+    lessons: list[ScheduleImportCandidate]
+
+
 class ClassRecordBase(BaseModel):
     user_id: int = 1
     schedule_rule_id: int | None = None

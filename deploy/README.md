@@ -125,6 +125,10 @@ INITIAL_ADMIN_EMAIL=teacher@example.com
 INITIAL_ADMIN_PASSWORD=replace-with-a-strong-password
 INITIAL_ADMIN_NAME=Teacher
 AUTH_TOKEN_TTL_HOURS=168
+AI_PROVIDER_BASE_URL=https://api.openai.com/v1
+AI_PROVIDER_TOKEN=sk-your-provider-token
+AI_SCHEDULE_MODEL=gpt-5.5
+AI_SCHEDULE_API_STYLE=responses
 ```
 
 If deploying somewhere else later, change `CORS_ORIGINS` to the real domain, for example:
@@ -252,6 +256,10 @@ INITIAL_ADMIN_EMAIL=teacher@example.com
 INITIAL_ADMIN_PASSWORD=replace-with-a-strong-password
 INITIAL_ADMIN_NAME=Teacher
 AUTH_TOKEN_TTL_HOURS=168
+AI_PROVIDER_BASE_URL=https://api.openai.com/v1
+AI_PROVIDER_TOKEN=sk-your-provider-token
+AI_SCHEDULE_MODEL=gpt-5.5
+AI_SCHEDULE_API_STYLE=responses
 ```
 
 Generate a strong `AUTH_SECRET` on the server with:
@@ -259,6 +267,8 @@ Generate a strong `AUTH_SECRET` on the server with:
 ```bash
 /opt/class_records/py311/bin/python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
+
+For timetable screenshot import, add your provider base URL and token to `/etc/class-records.env`. `AI_PROVIDER_BASE_URL` should normally include `/v1`. `AI_SCHEDULE_MODEL` is optional and defaults to `gpt-5.5`; change it if your provider uses a different model name. `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`.
 
 If you ever need to reset the app login:
 

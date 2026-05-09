@@ -11,16 +11,18 @@ import {
   Save,
   Settings,
   Trash2,
+  Upload,
   UserCircle,
   X,
 } from "lucide-react";
 
 import { api } from "./api";
-import type { ClassRecord, ClassStatus, ScheduleRule, Stats, TeachingClass, TodayItem, User } from "./types";
+import type { ClassRecord, ClassStatus, ScheduleImportCandidate, ScheduleRule, Stats, TeachingClass, TodayItem, User } from "./types";
 import "./styles.css";
 
 type View = "today" | "records" | "stats" | "schedule" | "account";
 type StatsMode = "week" | "month" | "salary" | "custom";
+type ScheduleImportDraft = ScheduleImportCandidate & { enabled: boolean };
 
 const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const statusLabels: Record<ClassStatus, string> = {
@@ -67,6 +69,14 @@ function salaryPeriodFor(value: string): { start: string; end: string } {
 
 function timeOnly(value: string): string {
   return value.slice(0, 5);
+}
+
+function normalizeClassName(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function classKey(value: string): string {
+  return normalizeClassName(value).toLowerCase();
 }
 
 function classRoomLabel(classroom?: string | null): string {
@@ -765,6 +775,12 @@ function ScheduleView({ classes, schedule, refresh }: ReturnType<typeof useAppDa
   }), []);
   const [form, setForm] = useState(scheduleDefaults);
   const [newClass, setNewClass] = useState({ name: "", classroom: "", notes: "" });
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importActiveFrom, setImportActiveFrom] = useState(todayIso());
+  const [importRows, setImportRows] = useState<ScheduleImportDraft[]>([]);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   async function addRule(event: React.FormEvent) {
     event.preventDefault();
@@ -790,6 +806,92 @@ function ScheduleView({ classes, schedule, refresh }: ReturnType<typeof useAppDa
     await refresh();
   }
 
+  async function importSchedule(event: React.FormEvent) {
+    event.preventDefault();
+    if (!importFile) return;
+    setImportBusy(true);
+    setImportError(null);
+    setImportMessage(null);
+    try {
+      const result = await api.importScheduleImage(importFile);
+      setImportRows(
+        result.lessons
+          .map((lesson) => ({ ...lesson, class_name: normalizeClassName(lesson.class_name), enabled: true }))
+          .sort((left, right) => left.weekday - right.weekday || left.start_time.localeCompare(right.start_time)),
+      );
+      setImportMessage(`${result.lessons.length} lessons found. Review before saving.`);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Could not import schedule image");
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  function updateImportRow(index: number, patch: Partial<ScheduleImportDraft>) {
+    setImportRows((rows) => rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+  }
+
+  function removeImportRow(index: number) {
+    setImportRows((rows) => rows.filter((_, rowIndex) => rowIndex !== index));
+  }
+
+  async function saveImportedSchedule() {
+    const selectedRows = importRows.filter((row) => row.enabled && normalizeClassName(row.class_name));
+    if (selectedRows.length === 0) return;
+    setImportBusy(true);
+    setImportError(null);
+    setImportMessage(null);
+    try {
+      const classByName = new Map(classes.map((item) => [classKey(item.name), item]));
+      for (const row of selectedRows) {
+        const normalizedName = normalizeClassName(row.class_name);
+        if (!classByName.has(classKey(normalizedName))) {
+          const created = await api.createClass({ name: normalizedName, classroom: null, notes: null });
+          classByName.set(classKey(created.name), created);
+        }
+      }
+
+      let createdCount = 0;
+      let skippedCount = 0;
+      for (const row of selectedRows) {
+        const teachingClass = classByName.get(classKey(row.class_name));
+        if (!teachingClass) continue;
+        const note = row.period?.trim() || row.notes?.trim() || null;
+        const alreadyExists = schedule.some(
+          (rule) =>
+            classKey(rule.teaching_class.name) === classKey(teachingClass.name) &&
+            rule.weekday === row.weekday &&
+            timeOnly(rule.start_time) === row.start_time &&
+            rule.duration_minutes === row.duration_minutes &&
+            (rule.notes ?? null) === note &&
+            rule.active_from === importActiveFrom,
+        );
+        if (alreadyExists) {
+          skippedCount += 1;
+          continue;
+        }
+        await api.createSchedule({
+          teaching_class_id: teachingClass.id,
+          weekday: row.weekday,
+          start_time: row.start_time,
+          duration_minutes: row.duration_minutes,
+          active_from: importActiveFrom,
+          notes: note,
+        });
+        createdCount += 1;
+      }
+
+      setImportRows([]);
+      setImportFile(null);
+      setImportMessage(`Saved ${createdCount} lessons${skippedCount ? `, skipped ${skippedCount} duplicates` : ""}.`);
+      await refresh();
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Could not save imported schedule");
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   return (
     <div className="view">
       <header className="view-header">
@@ -798,6 +900,86 @@ function ScheduleView({ classes, schedule, refresh }: ReturnType<typeof useAppDa
           <h2>Schedule</h2>
         </div>
       </header>
+      <form className="toolbar-form schedule-form" onSubmit={importSchedule}>
+        <h3 className="form-title">Import timetable image</h3>
+        <label className="field wide-field">
+          <span>Screenshot</span>
+          <input className="control file-control" type="file" accept="image/*" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
+        </label>
+        <label className="field compact">
+          <span>Active from</span>
+          <input className="control" type="date" value={importActiveFrom} onChange={(event) => setImportActiveFrom(event.target.value)} />
+        </label>
+        <button className="icon-button primary" type="submit" disabled={importBusy || !importFile} title="Import timetable image">
+          <Upload size={18} />
+          {importBusy ? "Reading..." : "Import"}
+        </button>
+      </form>
+      {importError && <div className="banner">{importError}</div>}
+      {importMessage && <div className="success-banner">{importMessage}</div>}
+      {importRows.length > 0 && (
+        <div className="import-preview">
+          <div className="import-preview-header">
+            <h3 className="form-title">Review imported lessons</h3>
+            <button className="icon-button primary" type="button" disabled={importBusy} onClick={saveImportedSchedule}>
+              <Save size={18} />
+              Save selected
+            </button>
+          </div>
+          <div className="table-wrap">
+            <table className="import-table">
+              <thead>
+                <tr>
+                  <th>Use</th>
+                  <th>Day</th>
+                  <th>Period</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Minutes</th>
+                  <th>Class</th>
+                  <th>Confidence</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {importRows.map((row, index) => (
+                  <tr key={`${row.weekday}-${row.start_time}-${row.class_name}-${index}`}>
+                    <td>
+                      <input type="checkbox" checked={row.enabled} onChange={(event) => updateImportRow(index, { enabled: event.target.checked })} />
+                    </td>
+                    <td>
+                      <select className="inline-select" value={row.weekday} onChange={(event) => updateImportRow(index, { weekday: Number(event.target.value) })}>
+                        {weekdays.map((day, dayIndex) => <option key={day} value={dayIndex}>{day}</option>)}
+                      </select>
+                    </td>
+                    <td>
+                      <input className="inline-text compact-cell" value={row.period ?? ""} onChange={(event) => updateImportRow(index, { period: event.target.value || null })} />
+                    </td>
+                    <td>
+                      <input className="inline-text time-cell" type="time" value={row.start_time} onChange={(event) => updateImportRow(index, { start_time: event.target.value })} />
+                    </td>
+                    <td>
+                      <input className="inline-text time-cell" type="time" value={row.end_time} onChange={(event) => updateImportRow(index, { end_time: event.target.value })} />
+                    </td>
+                    <td>
+                      <input className="inline-number" type="number" min="1" value={row.duration_minutes} onChange={(event) => updateImportRow(index, { duration_minutes: Number(event.target.value) })} />
+                    </td>
+                    <td>
+                      <input className="inline-text" value={row.class_name} onChange={(event) => updateImportRow(index, { class_name: event.target.value })} />
+                    </td>
+                    <td>{Math.round(row.confidence * 100)}%</td>
+                    <td>
+                      <button className="icon-button subtle" type="button" onClick={() => removeImportRow(index)} title="Remove row">
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       <form className="toolbar-form schedule-form" onSubmit={addClass}>
         <h3 className="form-title">Add class</h3>
         <label className="field">

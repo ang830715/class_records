@@ -35,6 +35,21 @@ export interface ScheduleRule {
   teaching_class: TeachingClass;
 }
 
+export interface ScheduleImportCandidate {
+  weekday: number;
+  period?: string | null;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  class_name: string;
+  notes?: string | null;
+  confidence: number;
+}
+
+export interface ScheduleImportResult {
+  lessons: ScheduleImportCandidate[];
+}
+
 export interface ClassRecord {
   id: number;
   user_id: number;

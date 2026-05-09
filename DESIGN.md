@@ -12,6 +12,7 @@ Supports:
 - Manual corrections with audit trail
 - Password login
 - Account profile and password updates
+- AI-assisted timetable screenshot import
 - Multi-device usage through a web/PWA-style interface
 
 Future: multi-user teachers.
@@ -190,8 +191,10 @@ GET /schedule
 POST /schedule
 PUT /schedule/{id}
 DELETE /schedule/{id}
+POST /schedule/import-image
 
 All schedule routes are scoped by the logged-in user's id.
+`POST /schedule/import-image` sends an uploaded timetable image to the configured AI provider and returns candidate lessons for frontend review. It does not save rules directly.
 
 ---
 
@@ -244,6 +247,7 @@ GET /stats?range=semester
 ### Schedule
 - Manage classes
 - Manage recurring rules
+- Import a timetable screenshot, review extracted rows, then save selected rules
 
 ---
 
@@ -289,6 +293,8 @@ Daily:
 
 - Production database target is PostgreSQL.
 - Local development can use SQLite.
+- AI schedule import requires `AI_PROVIDER_TOKEN`; `AI_PROVIDER_BASE_URL` points to an OpenAI-compatible `/v1` base URL.
+- `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`; `AI_SCHEDULE_MODEL` defaults to `gpt-5.5`.
 - No Alembic migrations are present yet.
 - `backend/app/schema_management.py` currently handles runtime addition of auth columns for older databases.
 - `TeachingClass` is still global, while `ScheduleRule` and `ClassRecord` are user-scoped.
@@ -304,3 +310,4 @@ Daily:
 - low mental load during a teaching day
 - login protects production data
 - account changes can be done from the web UI
+

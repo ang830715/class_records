@@ -213,6 +213,10 @@ nav {
   flex: 1 1 280px;
 }
 
+.file-control {
+  padding: 8px 12px;
+}
+
 .banner,
 .success-banner,
 .loading,
@@ -415,6 +419,22 @@ nav {
   background: white;
 }
 
+.import-preview {
+  display: grid;
+  gap: 10px;
+}
+
+.import-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.import-preview-header .form-title {
+  flex: 0 1 auto;
+}
+
 .table-wrap {
   overflow: auto;
   border: 1px solid #dce3df;
@@ -451,8 +471,20 @@ th {
   width: 160px;
 }
 
+.inline-text.compact-cell {
+  width: 76px;
+}
+
+.inline-text.time-cell {
+  width: 110px;
+}
+
 .inline-text.note-cell {
   width: 260px;
+}
+
+.import-table {
+  min-width: 980px;
 }
 
 .segmented {

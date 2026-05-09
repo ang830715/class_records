@@ -11,6 +11,7 @@ The key rule is simple: **`ClassRecord` is the source of truth**. Schedule rules
 - Manage teaching classes such as `PA4`
 - Store each class's usual classroom and notes
 - Define recurring weekly schedule rules by class, weekday, and time
+- Import a timetable screenshot with AI and review the extracted weekly lessons before saving
 - Show a daily teaching checklist from the weekly schedule
 - Show the selected date and weekday clearly in English
 - Show period labels such as `P1` and `P2` together with start times
@@ -30,6 +31,7 @@ The key rule is simple: **`ClassRecord` is the source of truth**. Schedule rules
 - Frontend: React, TypeScript, Vite
 - UI: plain CSS with lucide-react icons
 - Authentication: password hash stored on `User`, signed bearer token from `AUTH_SECRET`
+- AI schedule import: backend sends timetable images to a configured OpenAI-compatible provider
 
 ## Current State
 
@@ -165,6 +167,7 @@ Schedule setup:
 1. Add reusable class names in **Schedule** with **Add class**.
 2. Add recurring weekly lessons in **Add weekly lesson**.
 3. Use `P1`, `P2`, etc. in **Period / notes** when the note is a period label.
+4. Or use **Import timetable image** to upload a screenshot, review the AI-extracted rows, and save selected weekly lessons.
 
 Account management:
 
@@ -251,6 +254,10 @@ $env:AUTH_SECRET="local-dev-secret-change-me"
 $env:INITIAL_ADMIN_EMAIL="teacher@example.com"
 $env:INITIAL_ADMIN_PASSWORD="teacher"
 $env:INITIAL_ADMIN_NAME="Teacher"
+$env:AI_PROVIDER_BASE_URL="https://api.openai.com/v1"
+$env:AI_PROVIDER_TOKEN="sk-your-provider-token"  # optional, only needed for timetable image import
+$env:AI_SCHEDULE_MODEL="gpt-5.5"
+$env:AI_SCHEDULE_API_STYLE="responses"
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
@@ -334,6 +341,8 @@ $env:DATABASE_URL="your_database_url_here"
 - `/today` merges dynamic schedule expectations with actual records.
 - Salary/counting should be based only on `ClassRecord` rows.
 - Most app API routes use the logged-in `current_user.id`; the frontend should not send or choose `user_id`.
+- `POST /schedule/import-image` requires login and `AI_PROVIDER_TOKEN`; it returns editable schedule candidates and does not write to the database by itself.
+- `AI_PROVIDER_BASE_URL` should normally include `/v1`. `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`, depending on what the provider supports.
 - SQLite files such as `backend/dev.db` are local runtime data and ignored by Git.
 - Build output such as `frontend/dist` is ignored by Git.
 - Production deployment should use PostgreSQL; SQLite is only for local development.

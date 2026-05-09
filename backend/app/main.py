@@ -3,14 +3,16 @@ from decimal import Decimal
 from os import getenv
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, selectinload
+from starlette.concurrency import run_in_threadpool
 
 from .auth import authenticate_user, create_access_token, get_current_user, hash_password, verify_password
 from .database import Base, engine, get_db
 from .models import ClassRecord, ClassStatus, EditLog, ScheduleRule, Semester, TeachingClass, User
+from .schedule_import import extract_schedule_from_image
 from .schema_management import ensure_runtime_columns
 from .schemas import (
     AccountUpdate,
@@ -21,6 +23,7 @@ from .schemas import (
     EditLogRead,
     LoginRequest,
     PasswordUpdate,
+    ScheduleImportResult,
     ScheduleRuleCreate,
     ScheduleRuleRead,
     ScheduleRuleUpdate,
@@ -217,6 +220,11 @@ def delete_schedule_rule(rule_id: int, db: DbSession, current_user: CurrentUser)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     db.delete(item)
     db.commit()
+
+
+@app.post("/schedule/import-image", response_model=ScheduleImportResult)
+async def import_schedule_image(current_user: CurrentUser, image: UploadFile = File(...)) -> ScheduleImportResult:
+    return await run_in_threadpool(extract_schedule_from_image, await image.read(), image.content_type or "")
 
 
 @app.get("/records", response_model=list[ClassRecordRead])

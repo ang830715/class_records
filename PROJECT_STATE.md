@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-05-08
+Last updated: 2026-05-09
 
 This file is a handoff note for future conversations. It summarizes what has already been built and what assumptions are currently true.
 
@@ -24,6 +24,12 @@ Schedule
 Account
 ```
 
+The Schedule view has an AI timetable image import workflow:
+
+```text
+Upload screenshot -> backend sends image to configured AI provider -> editable candidate rows -> user saves selected weekly lessons
+```
+
 ## Current Architecture
 
 Backend:
@@ -32,6 +38,7 @@ Backend:
 FastAPI
 SQLAlchemy
 Pydantic
+python-multipart for image uploads
 ```
 
 Frontend:
@@ -97,6 +104,10 @@ INITIAL_ADMIN_EMAIL
 INITIAL_ADMIN_PASSWORD
 INITIAL_ADMIN_NAME
 AUTH_TOKEN_TTL_HOURS
+AI_PROVIDER_BASE_URL
+AI_PROVIDER_TOKEN
+AI_SCHEDULE_MODEL
+AI_SCHEDULE_API_STYLE
 ```
 
 Public endpoints:
@@ -153,6 +164,8 @@ ClassRecord
 Semester
 EditLog
 ```
+
+AI schedule import does not add a database table. It returns candidate rows with weekday, period, start/end time, duration, class name, notes, and confidence. The frontend then creates missing `TeachingClass` rows and selected `ScheduleRule` rows through the normal API.
 
 The app still initializes and uses `User(id=1)` for the first teacher/admin. Routes now derive the active teacher from `current_user.id`, which prepares the backend for future multi-user work.
 
@@ -211,6 +224,17 @@ $env:DATABASE_URL="sqlite:///./dev.db"
 .\.venv\Scripts\python.exe scripts\check_database.py
 ```
 
+Verify backend import after dependency changes:
+
+```powershell
+cd backend
+$env:DATABASE_URL="sqlite:///./verify_import.db"
+$env:AUTH_SECRET="verify-secret"
+$env:INITIAL_ADMIN_EMAIL="teacher@example.com"
+$env:INITIAL_ADMIN_PASSWORD="verify-password"
+.\.venv\Scripts\python.exe -c "from app.main import app; print(app.title); print(len(app.routes))"
+```
+
 ## Server Update Checklist
 
 Backend update:
@@ -254,6 +278,7 @@ Recent local checks performed during implementation:
 python -m compileall backend\app backend\scripts
 npm.cmd run build
 HTTP smoke test: login, protected /classes, profile update, password change
+Backend import smoke test for the image upload route
 ```
 
 Expected protected-route behavior:
@@ -262,6 +287,16 @@ Expected protected-route behavior:
 GET /health -> 200
 GET /classes without token -> 401
 GET /classes with valid token -> 200
+```
+
+Current AI schedule import behavior:
+
+```text
+POST /schedule/import-image requires login.
+If AI_PROVIDER_TOKEN/OPENAI_API_KEY is missing, it returns 503 with "Schedule image import is not configured".
+The endpoint only returns preview candidates; it does not write schedule rows directly.
+AI_PROVIDER_BASE_URL defaults to https://api.openai.com/v1.
+AI_SCHEDULE_API_STYLE defaults to responses; use chat_completions for providers that only support /v1/chat/completions.
 ```
 
 ## Next Good Improvements
@@ -276,6 +311,7 @@ Recommended next work:
 5. Consider HttpOnly cookie sessions instead of localStorage bearer tokens.
 6. Add missing-days view in frontend.
 7. Add schedule editing, not only schedule create/delete.
+8. Add server-side bulk save/replace behavior for imported schedules if term schedule changes become frequent.
 ```
 
 ## SSH Note
@@ -287,3 +323,4 @@ ssh root@39.99.137.40
 ```
 
 Do not store or repeat SSH passphrases in project files or chat.
+

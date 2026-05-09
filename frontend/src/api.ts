@@ -1,6 +1,7 @@
 ﻿import type {
   AuthToken,
   ClassRecord,
+  ScheduleImportResult,
   ScheduleRule,
   Semester,
   Stats,
@@ -23,9 +24,10 @@ interface StatsParams {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const isFormData = init?.body instanceof FormData;
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
-      "Content-Type": "application/json",
+      ...(!isFormData ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
@@ -73,6 +75,11 @@ export const api = {
   updateSchedule: (id: number, body: Partial<ScheduleRule>) =>
     request<ScheduleRule>(`/schedule/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteSchedule: (id: number) => request<void>(`/schedule/${id}`, { method: "DELETE" }),
+  importScheduleImage: (image: File) => {
+    const formData = new FormData();
+    formData.set("image", image);
+    return request<ScheduleImportResult>("/schedule/import-image", { method: "POST", body: formData });
+  },
 
   records: () => request<ClassRecord[]>("/records"),
   createRecord: (body: Partial<ClassRecord>) =>
