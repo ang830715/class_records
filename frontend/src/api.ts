@@ -75,6 +75,7 @@ export const api = {
   updateSchedule: (id: number, body: Partial<ScheduleRule>) =>
     request<ScheduleRule>(`/schedule/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteSchedule: (id: number) => request<void>(`/schedule/${id}`, { method: "DELETE" }),
+  clearSchedule: () => request<void>("/schedule", { method: "DELETE" }),
   importScheduleImage: (image: File) => {
     const formData = new FormData();
     formData.set("image", image);

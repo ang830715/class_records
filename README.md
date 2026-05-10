@@ -11,6 +11,7 @@ The key rule is simple: **`ClassRecord` is the source of truth**. Schedule rules
 - Manage teaching classes such as `PA4`
 - Store each class's usual classroom and notes
 - Define recurring weekly schedule rules by class, weekday, and time
+- Clear all weekly schedule rules without deleting existing class records
 - Import a timetable screenshot with AI and review the extracted weekly lessons before saving
 - Show a daily teaching checklist from the weekly schedule
 - Show the selected date and weekday clearly in English
@@ -169,6 +170,7 @@ Schedule setup:
 2. Add recurring weekly lessons in **Add weekly lesson**.
 3. Use `P1`, `P2`, etc. in **Period / notes** when the note is a period label.
 4. Or use **Import timetable image** to upload a screenshot, review the AI-extracted rows, and save selected weekly lessons.
+5. Use **Clear schedule** when you need to reset the weekly timetable. Existing records stay in **Records**.
 
 Current AI import note:
 
@@ -355,6 +357,7 @@ $env:DATABASE_URL="your_database_url_here"
 
 - Generated schedule records are not stored in the database.
 - `/today` merges dynamic schedule expectations with actual records.
+- Deleting one schedule rule or clearing all schedule rules sets old records' `schedule_rule_id` to null instead of deleting the records.
 - Salary/counting should be based only on `ClassRecord` rows.
 - Most app API routes use the logged-in `current_user.id`; the frontend should not send or choose `user_id`.
 - `POST /schedule/import-image` requires login and `AI_PROVIDER_TOKEN`; it returns editable schedule candidates and does not write to the database by itself.

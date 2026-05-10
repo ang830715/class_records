@@ -560,6 +560,17 @@ Expected:
 /classes returns 401 Unauthorized unless you pass a bearer token
 ```
 
+Schedule reset behavior:
+
+```text
+DELETE /schedule/{rule_id}
+  Detaches old records from that schedule rule, then deletes the rule.
+
+DELETE /schedule
+  Clears all weekly schedule rules for the logged-in user.
+  Existing class_records rows stay in the database.
+```
+
 Login test:
 
 ```bash

@@ -30,6 +30,12 @@ The Schedule view has an AI timetable image import workflow:
 Upload screenshot -> backend sends image to configured AI provider -> editable candidate rows -> user saves selected weekly lessons
 ```
 
+The Schedule view also has a **Clear schedule** action:
+
+```text
+Clear schedule -> detach old records from their schedule_rule_id -> delete current user's ScheduleRule rows
+```
+
 Current status:
 
 ```text
@@ -170,6 +176,7 @@ ScheduleRule
 ClassRecord
 - user_id scoped
 - source of truth for actual lessons
+- schedule_rule_id can become null when an old schedule is deleted or cleared
 
 Semester
 EditLog
@@ -192,6 +199,13 @@ Important limitation:
 
 ```text
 TeachingClass is still global. Before true multi-user support, decide whether class names should be shared globally or owned per user.
+```
+
+Schedule reset behavior:
+
+```text
+DELETE /schedule/{rule_id} detaches matching ClassRecord.schedule_rule_id values before deleting the rule.
+DELETE /schedule clears all current-user ScheduleRule rows and leaves ClassRecord rows intact.
 ```
 
 ## Runtime Schema
@@ -306,6 +320,7 @@ Expected protected-route behavior:
 GET /health -> 200
 GET /classes without token -> 401
 GET /classes with valid token -> 200
+DELETE /schedule with valid token -> 204 and existing records remain
 ```
 
 Current AI schedule import behavior:

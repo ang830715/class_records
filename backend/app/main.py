@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.orm import Session, selectinload
 from starlette.concurrency import run_in_threadpool
 
@@ -213,11 +213,30 @@ def update_schedule_rule(rule_id: int, payload: ScheduleRuleUpdate, db: DbSessio
     return get_or_404(db, ScheduleRule, rule_id)
 
 
+@app.delete("/schedule", status_code=status.HTTP_204_NO_CONTENT)
+def clear_schedule(db: DbSession, current_user: CurrentUser) -> None:
+    rule_ids = list(db.scalars(select(ScheduleRule.id).where(ScheduleRule.user_id == current_user.id)))
+    if not rule_ids:
+        return
+    db.execute(
+        update(ClassRecord)
+        .where(ClassRecord.user_id == current_user.id, ClassRecord.schedule_rule_id.in_(rule_ids))
+        .values(schedule_rule_id=None)
+    )
+    db.execute(delete(ScheduleRule).where(ScheduleRule.user_id == current_user.id, ScheduleRule.id.in_(rule_ids)))
+    db.commit()
+
+
 @app.delete("/schedule/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_schedule_rule(rule_id: int, db: DbSession, current_user: CurrentUser) -> None:
     item = get_or_404(db, ScheduleRule, rule_id)
     if item.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    db.execute(
+        update(ClassRecord)
+        .where(ClassRecord.user_id == current_user.id, ClassRecord.schedule_rule_id == item.id)
+        .values(schedule_rule_id=None)
+    )
     db.delete(item)
     db.commit()
 

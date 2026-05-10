@@ -247,6 +247,7 @@ GET /stats?range=semester
 ### Schedule
 - Manage classes
 - Manage recurring rules
+- Clear all recurring rules for the current user without deleting historical records
 - Import a timetable screenshot, review extracted rows, then save selected rules
 - AI import is preview-first and strict: the provider must return the exact `lessons` JSON schema, and the backend rejects aliases, extra keys, loose times, and duration mismatches.
 
@@ -294,6 +295,7 @@ Daily:
 
 - Production database target is PostgreSQL.
 - Local development can use SQLite.
+- Schedule deletion is history-safe: deleting one rule or clearing all rules first detaches matching `ClassRecord.schedule_rule_id` values, then removes only `ScheduleRule` rows.
 - AI schedule import requires `AI_PROVIDER_TOKEN`; `AI_PROVIDER_BASE_URL` points to an OpenAI-compatible `/v1` base URL.
 - `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`; `AI_SCHEDULE_MODEL` defaults to `gpt-5.5`.
 - Provider calls include `AI_PROVIDER_USER_AGENT`, defaulting to `class-records/0.1`, because some third-party providers reject Python's default user agent.

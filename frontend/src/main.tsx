@@ -779,6 +779,7 @@ function ScheduleView({ classes, schedule, refresh }: ReturnType<typeof useAppDa
   const [importActiveFrom, setImportActiveFrom] = useState(todayIso());
   const [importRows, setImportRows] = useState<ScheduleImportDraft[]>([]);
   const [importBusy, setImportBusy] = useState(false);
+  const [clearBusy, setClearBusy] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState<string | null>(null);
 
@@ -892,6 +893,27 @@ function ScheduleView({ classes, schedule, refresh }: ReturnType<typeof useAppDa
     }
   }
 
+  async function clearSchedule() {
+    if (schedule.length === 0 || clearBusy) return;
+    const confirmed = window.confirm(
+      "Clear all weekly schedule rules? Existing class records will stay in Records.",
+    );
+    if (!confirmed) return;
+    setClearBusy(true);
+    setImportError(null);
+    setImportMessage(null);
+    try {
+      await api.clearSchedule();
+      setImportRows([]);
+      setImportMessage("Weekly schedule cleared. Existing records were not deleted.");
+      await refresh();
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Could not clear schedule");
+    } finally {
+      setClearBusy(false);
+    }
+  }
+
   return (
     <div className="view">
       <header className="view-header">
@@ -899,6 +921,10 @@ function ScheduleView({ classes, schedule, refresh }: ReturnType<typeof useAppDa
           <p className="eyebrow">Expected classes</p>
           <h2>Schedule</h2>
         </div>
+        <button className="icon-button danger" type="button" disabled={clearBusy || schedule.length === 0} onClick={clearSchedule} title="Clear weekly schedule">
+          <Trash2 size={18} />
+          {clearBusy ? "Clearing..." : "Clear schedule"}
+        </button>
       </header>
       <form className="toolbar-form schedule-form" onSubmit={importSchedule}>
         <h3 className="form-title">Import timetable image</h3>
