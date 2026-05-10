@@ -129,6 +129,7 @@ AI_PROVIDER_BASE_URL=https://api.openai.com/v1
 AI_PROVIDER_TOKEN=sk-your-provider-token
 AI_SCHEDULE_MODEL=gpt-5.5
 AI_SCHEDULE_API_STYLE=responses
+AI_PROVIDER_USER_AGENT=class-records/0.1
 ```
 
 If deploying somewhere else later, change `CORS_ORIGINS` to the real domain, for example:
@@ -260,6 +261,7 @@ AI_PROVIDER_BASE_URL=https://api.openai.com/v1
 AI_PROVIDER_TOKEN=sk-your-provider-token
 AI_SCHEDULE_MODEL=gpt-5.5
 AI_SCHEDULE_API_STYLE=responses
+AI_PROVIDER_USER_AGENT=class-records/0.1
 ```
 
 Generate a strong `AUTH_SECRET` on the server with:
@@ -268,7 +270,7 @@ Generate a strong `AUTH_SECRET` on the server with:
 /opt/class_records/py311/bin/python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-For timetable screenshot import, add your provider base URL and token to `/etc/class-records.env`. `AI_PROVIDER_BASE_URL` should normally include `/v1`. `AI_SCHEDULE_MODEL` is optional and defaults to `gpt-5.5`; change it if your provider uses a different model name. `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`.
+For timetable screenshot import, add your provider base URL and token to `/etc/class-records.env`. `AI_PROVIDER_BASE_URL` should normally include `/v1`. `AI_SCHEDULE_MODEL` is optional and defaults to `gpt-5.5`; change it if your provider uses a different model name. `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`. `AI_PROVIDER_USER_AGENT` defaults to `class-records/0.1`; some third-party providers reject Python's default user agent.
 
 If you ever need to reset the app login:
 

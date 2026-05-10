@@ -258,6 +258,7 @@ $env:AI_PROVIDER_BASE_URL="https://api.openai.com/v1"
 $env:AI_PROVIDER_TOKEN="sk-your-provider-token"  # optional, only needed for timetable image import
 $env:AI_SCHEDULE_MODEL="gpt-5.5"
 $env:AI_SCHEDULE_API_STYLE="responses"
+$env:AI_PROVIDER_USER_AGENT="class-records/0.1"
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
@@ -343,6 +344,7 @@ $env:DATABASE_URL="your_database_url_here"
 - Most app API routes use the logged-in `current_user.id`; the frontend should not send or choose `user_id`.
 - `POST /schedule/import-image` requires login and `AI_PROVIDER_TOKEN`; it returns editable schedule candidates and does not write to the database by itself.
 - `AI_PROVIDER_BASE_URL` should normally include `/v1`. `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`, depending on what the provider supports.
+- `AI_PROVIDER_USER_AGENT` defaults to `class-records/0.1`; some third-party providers reject Python's default user agent.
 - SQLite files such as `backend/dev.db` are local runtime data and ignored by Git.
 - Build output such as `frontend/dist` is ignored by Git.
 - Production deployment should use PostgreSQL; SQLite is only for local development.

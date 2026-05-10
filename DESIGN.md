@@ -295,6 +295,7 @@ Daily:
 - Local development can use SQLite.
 - AI schedule import requires `AI_PROVIDER_TOKEN`; `AI_PROVIDER_BASE_URL` points to an OpenAI-compatible `/v1` base URL.
 - `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`; `AI_SCHEDULE_MODEL` defaults to `gpt-5.5`.
+- Provider calls include `AI_PROVIDER_USER_AGENT`, defaulting to `class-records/0.1`, because some third-party providers reject Python's default user agent.
 - No Alembic migrations are present yet.
 - `backend/app/schema_management.py` currently handles runtime addition of auth columns for older databases.
 - `TeachingClass` is still global, while `ScheduleRule` and `ClassRecord` are user-scoped.

@@ -108,6 +108,7 @@ AI_PROVIDER_BASE_URL
 AI_PROVIDER_TOKEN
 AI_SCHEDULE_MODEL
 AI_SCHEDULE_API_STYLE
+AI_PROVIDER_USER_AGENT
 ```
 
 Public endpoints:
@@ -297,6 +298,7 @@ If AI_PROVIDER_TOKEN/OPENAI_API_KEY is missing, it returns 503 with "Schedule im
 The endpoint only returns preview candidates; it does not write schedule rows directly.
 AI_PROVIDER_BASE_URL defaults to https://api.openai.com/v1.
 AI_SCHEDULE_API_STYLE defaults to responses; use chat_completions for providers that only support /v1/chat/completions.
+AI_PROVIDER_USER_AGENT defaults to class-records/0.1 to avoid providers rejecting Python's default user agent.
 ```
 
 ## Next Good Improvements
