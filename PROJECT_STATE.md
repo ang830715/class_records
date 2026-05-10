@@ -39,10 +39,11 @@ Clear schedule -> detach old records from their schedule_rule_id -> delete curre
 Current status:
 
 ```text
-Commit 1ab8c71 is deployed on the server.
+Commit 023be1d is deployed on the server.
 The server working tree was restored to normal git pull flow after earlier live hot-patches.
 AI image upload has been tested once successfully with the user's third-party provider.
-Current local work changes AI schedule parsing from tolerant debugging mode to strict schema validation.
+AI schedule import now uses strict schema validation.
+Schedule clearing is deployed and preserves existing records.
 ```
 
 ## Current Architecture
@@ -339,10 +340,11 @@ Recent server verification:
 
 ```text
 Server repo: /opt/class_records/app
-Latest deployed commit: 1ab8c71 make AI schedule import work with provider
+Latest deployed commit: 023be1d try fixing the delete schedule problem
 Backend service: active after restart
 GET http://127.0.0.1:8000/health -> {"status":"ok"}
 Public frontend/API remain behind https://physics.lyxi.top and /api
+Frontend bundle deployed: assets/index-CtdX8C06.js
 ```
 
 ## Next Good Improvements

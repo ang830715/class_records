@@ -43,9 +43,10 @@ Python: /opt/class_records/py311/bin/python, version 3.11.15
 Current deployed application state:
 
 ```text
-Latest deployed commit: 1ab8c71 make AI schedule import work with provider
+Latest deployed commit: 023be1d try fixing the delete schedule problem
 Backend health: http://127.0.0.1:8000/health returns {"status":"ok"}
 AI timetable image import has worked once with the configured third-party provider.
+Frontend bundle deployed: assets/index-CtdX8C06.js
 Server Git working tree should be clean after pull; normal updates should use git pull --ff-only.
 ```
 

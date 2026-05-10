@@ -232,7 +232,7 @@ Database: PostgreSQL
 Current deployed application commit:
 
 ```text
-1ab8c71 make AI schedule import work with provider
+023be1d try fixing the delete schedule problem
 ```
 
 The server working tree is expected to stay clean so normal `git pull --ff-only` works. Avoid live-editing server files except during emergency debugging; make local commits and deploy them through Git when possible.
