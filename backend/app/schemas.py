@@ -5,7 +5,7 @@ from datetime import datetime as DateTime
 from datetime import time as Time
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .models import ClassStatus
 
@@ -98,17 +98,41 @@ class ScheduleRuleRead(ScheduleRuleBase):
 
 
 class ScheduleImportCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     weekday: int = Field(ge=0, le=6)
-    period: str | None = Field(default=None, max_length=20)
+    period: str | None = Field(max_length=20)
     start_time: str = Field(pattern=r"^\d{2}:\d{2}$")
     end_time: str = Field(pattern=r"^\d{2}:\d{2}$")
     duration_minutes: int = Field(gt=0, le=480)
     class_name: str = Field(min_length=1, max_length=160)
-    notes: str | None = None
+    notes: str | None
     confidence: float = Field(ge=0, le=1)
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def validate_clock_time(cls, value: str) -> str:
+        try:
+            DateTime.strptime(value, "%H:%M")
+        except ValueError as exc:
+            raise ValueError("time must be a real 24-hour HH:MM value") from exc
+        return value
+
+    @model_validator(mode="after")
+    def validate_duration(self) -> "ScheduleImportCandidate":
+        start = DateTime.strptime(self.start_time, "%H:%M")
+        end = DateTime.strptime(self.end_time, "%H:%M")
+        expected_minutes = int((end - start).total_seconds() // 60)
+        if expected_minutes <= 0:
+            raise ValueError("end_time must be after start_time")
+        if self.duration_minutes != expected_minutes:
+            raise ValueError("duration_minutes must equal the difference between start_time and end_time")
+        return self
 
 
 class ScheduleImportResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     lessons: list[ScheduleImportCandidate]
 
 

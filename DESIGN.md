@@ -248,7 +248,7 @@ GET /stats?range=semester
 - Manage classes
 - Manage recurring rules
 - Import a timetable screenshot, review extracted rows, then save selected rules
-- Current AI import implementation is preview-first and tolerant of several provider response shapes; planned refinement is stricter JSON schema validation with clear failure behavior.
+- AI import is preview-first and strict: the provider must return the exact `lessons` JSON schema, and the backend rejects aliases, extra keys, loose times, and duration mismatches.
 
 ---
 
@@ -297,7 +297,7 @@ Daily:
 - AI schedule import requires `AI_PROVIDER_TOKEN`; `AI_PROVIDER_BASE_URL` points to an OpenAI-compatible `/v1` base URL.
 - `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`; `AI_SCHEDULE_MODEL` defaults to `gpt-5.5`.
 - Provider calls include `AI_PROVIDER_USER_AGENT`, defaulting to `class-records/0.1`, because some third-party providers reject Python's default user agent.
-- AI import was confirmed working once on production with the user's third-party provider. The current parser is deliberately permissive from debugging; a future change should require the provider/model to obey the exact `lessons` schema.
+- AI import was confirmed working once on production with the user's third-party provider. The importer now requires the provider/model to obey the exact `lessons` schema.
 - No Alembic migrations are present yet.
 - `backend/app/schema_management.py` currently handles runtime addition of auth columns for older databases.
 - `TeachingClass` is still global, while `ScheduleRule` and `ClassRecord` are user-scoped.

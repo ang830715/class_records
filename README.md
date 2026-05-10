@@ -173,7 +173,7 @@ Schedule setup:
 Current AI import note:
 
 ```text
-The importer currently accepts several provider output shapes because the third-party provider did not always follow the exact JSON schema during debugging. The desired next refinement is a stricter JSON contract with clear validation errors.
+The importer now uses a strict JSON contract. The provider must return exactly {"lessons":[...]} with the required lesson fields; the backend only strips optional markdown fences before JSON parsing and rejects aliases, extra keys, loose weekday names, loose times, and mismatched durations.
 ```
 
 Account management:
@@ -360,7 +360,7 @@ $env:DATABASE_URL="your_database_url_here"
 - `POST /schedule/import-image` requires login and `AI_PROVIDER_TOKEN`; it returns editable schedule candidates and does not write to the database by itself.
 - `AI_PROVIDER_BASE_URL` should normally include `/v1`. `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`, depending on what the provider supports.
 - `AI_PROVIDER_USER_AGENT` defaults to `class-records/0.1`; some third-party providers reject Python's default user agent.
-- The current importer tolerates messy provider output, including fenced JSON, table-row output, weekday names, and non-padded times. Future work should tighten this into strict schema validation now that provider connectivity is working.
+- The current importer is strict: it requires a top-level `lessons` array, exact lesson keys, integer weekday values from 0 to 6, zero-padded real `HH:MM` times, and `duration_minutes` matching the start/end time difference.
 - SQLite files such as `backend/dev.db` are local runtime data and ignored by Git.
 - Build output such as `frontend/dist` is ignored by Git.
 - Production deployment should use PostgreSQL; SQLite is only for local development.

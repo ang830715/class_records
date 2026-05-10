@@ -281,7 +281,7 @@ Generate a strong `AUTH_SECRET` on the server with:
 
 For timetable screenshot import, add your provider base URL and token to `/etc/class-records.env`. `AI_PROVIDER_BASE_URL` should normally include `/v1`. `AI_SCHEDULE_MODEL` is optional and defaults to `gpt-5.5`; change it if your provider uses a different model name. `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`. `AI_PROVIDER_USER_AGENT` defaults to `class-records/0.1`; some third-party providers reject Python's default user agent.
 
-Current import behavior is intentionally tolerant because the third-party provider initially returned responses that were not always exact schema JSON. It accepts several common shapes, including a `lessons` array, a period-row table, day-grouped rows, fenced JSON, weekday names, and non-padded times. Future work should tighten this to strict schema validation now that provider connectivity is confirmed.
+Current import behavior is strict. The provider must return a top-level `lessons` array with exact lesson objects: `weekday`, `period`, `start_time`, `end_time`, `duration_minutes`, `class_name`, `notes`, and `confidence`. The backend rejects aliases, extra keys, table-shaped output, weekday names, non-padded or invalid times, and durations that do not match the start/end time difference. Complete markdown JSON fences are stripped, but provider text around JSON is not recovered.
 
 If you ever need to reset the app login:
 
