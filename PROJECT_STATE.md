@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-05-09
+Last updated: 2026-05-10
 
 This file is a handoff note for future conversations. It summarizes what has already been built and what assumptions are currently true.
 
@@ -28,6 +28,14 @@ The Schedule view has an AI timetable image import workflow:
 
 ```text
 Upload screenshot -> backend sends image to configured AI provider -> editable candidate rows -> user saves selected weekly lessons
+```
+
+Current status:
+
+```text
+Commit 1ab8c71 is deployed on the server.
+The server working tree was restored to normal git pull flow after earlier live hot-patches.
+AI image upload has been tested once successfully with the user's third-party provider.
 ```
 
 ## Current Architecture
@@ -168,6 +176,18 @@ EditLog
 
 AI schedule import does not add a database table. It returns candidate rows with weekday, period, start/end time, duration, class name, notes, and confidence. The frontend then creates missing `TeachingClass` rows and selected `ScheduleRule` rows through the normal API.
 
+The current importer intentionally has a tolerant parser because the third-party provider did not always follow the exact schema during initial debugging. It can accept fenced JSON, provider text around JSON, table-row output, day-grouped output, non-padded times, weekday names, and missing durations that can be computed from start/end time.
+
+Planned next step:
+
+```text
+Move from tolerant parsing to a stricter contract:
+1. Require the provider/model to return the exact lessons JSON schema.
+2. Keep only minimal JSON cleanup such as removing markdown fences.
+3. Fail clearly when schema validation fails.
+4. Optionally add one model-powered repair retry before failing.
+```
+
 The app still initializes and uses `User(id=1)` for the first teacher/admin. Routes now derive the active teacher from `current_user.id`, which prepares the backend for future multi-user work.
 
 Important limitation:
@@ -301,6 +321,16 @@ AI_SCHEDULE_API_STYLE defaults to responses; use chat_completions for providers 
 AI_PROVIDER_USER_AGENT defaults to class-records/0.1 to avoid providers rejecting Python's default user agent.
 ```
 
+Recent server verification:
+
+```text
+Server repo: /opt/class_records/app
+Latest deployed commit: 1ab8c71 make AI schedule import work with provider
+Backend service: active after restart
+GET http://127.0.0.1:8000/health -> {"status":"ok"}
+Public frontend/API remain behind https://physics.lyxi.top and /api
+```
+
 ## Next Good Improvements
 
 Recommended next work:
@@ -314,6 +344,7 @@ Recommended next work:
 6. Add missing-days view in frontend.
 7. Add schedule editing, not only schedule create/delete.
 8. Add server-side bulk save/replace behavior for imported schedules if term schedule changes become frequent.
+9. Tighten AI schedule import from tolerant parsing to strict schema validation.
 ```
 
 ## SSH Note

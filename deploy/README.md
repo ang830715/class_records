@@ -40,6 +40,15 @@ Backend process: uvicorn on 127.0.0.1:8000
 Python: /opt/class_records/py311/bin/python, version 3.11.15
 ```
 
+Current deployed application state:
+
+```text
+Latest deployed commit: 1ab8c71 make AI schedule import work with provider
+Backend health: http://127.0.0.1:8000/health returns {"status":"ok"}
+AI timetable image import has worked once with the configured third-party provider.
+Server Git working tree should be clean after pull; normal updates should use git pull --ff-only.
+```
+
 BT Panel manages the website entry:
 
 ```text
@@ -272,6 +281,8 @@ Generate a strong `AUTH_SECRET` on the server with:
 
 For timetable screenshot import, add your provider base URL and token to `/etc/class-records.env`. `AI_PROVIDER_BASE_URL` should normally include `/v1`. `AI_SCHEDULE_MODEL` is optional and defaults to `gpt-5.5`; change it if your provider uses a different model name. `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`. `AI_PROVIDER_USER_AGENT` defaults to `class-records/0.1`; some third-party providers reject Python's default user agent.
 
+Current import behavior is intentionally tolerant because the third-party provider initially returned responses that were not always exact schema JSON. It accepts several common shapes, including a `lessons` array, a period-row table, day-grouped rows, fenced JSON, weekday names, and non-padded times. Future work should tighten this to strict schema validation now that provider connectivity is confirmed.
+
 If you ever need to reset the app login:
 
 ```bash
@@ -432,8 +443,11 @@ When code changes are pushed to GitHub:
 
 ```bash
 cd /opt/class_records/app
+git status --short
 git pull --ff-only
 ```
+
+If `git pull --ff-only` says local changes would be overwritten, stop and inspect the files first. This happened once after live debugging `backend/app/schedule_import.py` directly on the server; the fix was to confirm the server file matched the pushed commit, make a backup copy under `/tmp`, restore the tracked file, and then pull.
 
 ### 2. Restart Backend If Backend Code Changed
 

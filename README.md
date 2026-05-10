@@ -41,6 +41,7 @@ As of the latest local work:
 - Local development uses SQLite through `scripts/start-dev.ps1`.
 - App routes are protected by login except `/health`, `/auth/login`, and `/auth/me` when checking an existing token.
 - The frontend includes **Today**, **Records**, **Stats**, **Schedule**, and **Account** views.
+- The Schedule page includes AI timetable screenshot import. It has been tested successfully once on production with the configured third-party provider.
 - The first/default user is still `User(id=1)`; future multi-user support should build from the current `current_user.id` route wiring.
 - There are no Alembic migrations yet. `backend/app/schema_management.py` contains a small runtime compatibility helper for the new auth columns.
 - The latest high-level handoff is in `PROJECT_STATE.md`.
@@ -169,6 +170,12 @@ Schedule setup:
 3. Use `P1`, `P2`, etc. in **Period / notes** when the note is a period label.
 4. Or use **Import timetable image** to upload a screenshot, review the AI-extracted rows, and save selected weekly lessons.
 
+Current AI import note:
+
+```text
+The importer currently accepts several provider output shapes because the third-party provider did not always follow the exact JSON schema during debugging. The desired next refinement is a stricter JSON contract with clear validation errors.
+```
+
 Account management:
 
 1. Open **Account** after signing in.
@@ -219,6 +226,14 @@ Backend: FastAPI systemd service on 127.0.0.1:8000
 Reverse proxy: BT Panel routes /api to the backend
 Database: PostgreSQL
 ```
+
+Current deployed application commit:
+
+```text
+1ab8c71 make AI schedule import work with provider
+```
+
+The server working tree is expected to stay clean so normal `git pull --ff-only` works. Avoid live-editing server files except during emergency debugging; make local commits and deploy them through Git when possible.
 
 Detailed deployment notes and recovery commands are in:
 
@@ -345,6 +360,7 @@ $env:DATABASE_URL="your_database_url_here"
 - `POST /schedule/import-image` requires login and `AI_PROVIDER_TOKEN`; it returns editable schedule candidates and does not write to the database by itself.
 - `AI_PROVIDER_BASE_URL` should normally include `/v1`. `AI_SCHEDULE_API_STYLE` can be `responses` or `chat_completions`, depending on what the provider supports.
 - `AI_PROVIDER_USER_AGENT` defaults to `class-records/0.1`; some third-party providers reject Python's default user agent.
+- The current importer tolerates messy provider output, including fenced JSON, table-row output, weekday names, and non-padded times. Future work should tighten this into strict schema validation now that provider connectivity is working.
 - SQLite files such as `backend/dev.db` are local runtime data and ignored by Git.
 - Build output such as `frontend/dist` is ignored by Git.
 - Production deployment should use PostgreSQL; SQLite is only for local development.
