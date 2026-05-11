@@ -42,8 +42,9 @@ As of the latest local work:
 - Production is intended to use PostgreSQL.
 - Local development uses SQLite through `scripts/start-dev.ps1`.
 - App routes are protected by login except `/health`, `/auth/login`, and `/auth/me` when checking an existing token.
-- The frontend includes **Today**, **Records**, **Stats**, **Schedule**, and **Account** views.
-- The Schedule page includes AI timetable screenshot import. It has been tested successfully once on production with the configured third-party provider.
+- The frontend includes **Today**, **Records**, **Stats**, **Schedule**, **Admin**, and **Account** views.
+- The Schedule page includes AI timetable screenshot import by file upload or pasted screenshot. It has been tested successfully once on production with the configured third-party provider.
+- The Admin page creates teacher accounts, toggles active/admin access, and resets teacher passwords.
 - The first/default user is still `User(id=1)`; future multi-user support should build from the current `current_user.id` route wiring.
 - There are no Alembic migrations yet. `backend/app/schema_management.py` contains a small runtime compatibility helper for the new auth columns.
 - The latest high-level handoff is in `PROJECT_STATE.md`.

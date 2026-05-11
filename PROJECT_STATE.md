@@ -40,7 +40,8 @@ Clear schedule -> detach old records from their schedule_rule_id -> delete curre
 Current status:
 
 ```text
-Commit 023be1d is deployed on the server.
+Commit 20e7be0 is deployed on the server frontend only for paste-to-import.
+Commit 4957f45 is committed and pushed to GitHub, but still needs backend/frontend deployment to the Aliyun server.
 The server working tree was restored to normal git pull flow after earlier live hot-patches.
 AI image upload has been tested once successfully with the user's third-party provider.
 AI schedule import now uses strict schema validation.
@@ -229,6 +230,7 @@ There are no Alembic migrations yet.
 ```text
 users.password_hash
 users.is_active
+users.is_admin
 ```
 
 Future schema changes should probably introduce Alembic.
@@ -301,6 +303,7 @@ Frontend update:
 cd "C:\Users\Ang Li\Desktop\coding\class_records\frontend"
 $env:VITE_API_BASE="/api"
 npm.cmd run build
+npm.cmd is useful on Windows if npm.ps1 is blocked by execution policy.
 ```
 
 Upload contents of:
@@ -320,8 +323,9 @@ to:
 Recent local checks performed during implementation:
 
 ```text
-python -m compileall backend\app backend\scripts
-npm.cmd run build
+PYTHONPYCACHEPREFIX=/private/tmp/class-records-pycache python3 -m compileall backend/app backend/scripts
+npm run build
+Python 3.13 temporary venv admin smoke test: first user is admin, admin can create teacher, deactivate/reactivate teacher, and reset teacher password.
 HTTP smoke test: login, protected /classes, profile update, password change
 Backend import smoke test for the image upload route
 ```
@@ -351,11 +355,12 @@ Recent server verification:
 
 ```text
 Server repo: /opt/class_records/app
-Latest deployed commit: 023be1d try fixing the delete schedule problem
+Latest backend deployed commit: 023be1d try fixing the delete schedule problem
+Latest frontend uploaded change: paste-to-import screenshot bundle from commit 20e7be0
 Backend service: active after restart
 GET http://127.0.0.1:8000/health -> {"status":"ok"}
 Public frontend/API remain behind https://physics.lyxi.top and /api
-Frontend bundle deployed: assets/index-CtdX8C06.js
+Frontend bundle deployed after paste-to-import: assets/index-BsC0fsE-.js
 ```
 
 ## Next Good Improvements
@@ -363,15 +368,16 @@ Frontend bundle deployed: assets/index-CtdX8C06.js
 Recommended next work:
 
 ```text
-1. Add PostgreSQL automatic backups on the server.
-2. Add Alembic migrations.
-3. Add tests for auth, today, records, stats, and account changes.
-4. Decide how true multi-user class ownership should work.
-5. Consider HttpOnly cookie sessions instead of localStorage bearer tokens.
-6. Add missing-days view in frontend.
-7. Add schedule editing, not only schedule create/delete.
-8. Add server-side bulk save/replace behavior for imported schedules if term schedule changes become frequent.
-9. Consider one model-powered repair retry for AI import if strict provider output still fails occasionally.
+1. Deploy the committed admin teacher-account management backend and frontend.
+2. Make TeachingClass user-owned so teachers do not share one global class catalog.
+3. Add PostgreSQL automatic backups on the server.
+4. Add Alembic migrations.
+5. Add tests for auth, today, records, stats, and account changes.
+6. Consider HttpOnly cookie sessions instead of localStorage bearer tokens.
+7. Add missing-days view in frontend.
+8. Add schedule editing, not only schedule create/delete.
+9. Add server-side bulk save/replace behavior for imported schedules if term schedule changes become frequent.
+10. Consider one model-powered repair retry for AI import if strict provider output still fails occasionally.
 ```
 
 ## SSH Note
