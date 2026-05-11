@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { useRef } from "react";
 import {
   BarChart3,
   CalendarDays,
@@ -22,7 +23,7 @@ import { api } from "./api";
 import type { ClassRecord, ClassStatus, ScheduleImportCandidate, ScheduleRule, Stats, TeachingClass, TodayItem, User } from "./types";
 import "./styles.css";
 
-type View = "today" | "records" | "stats" | "schedule" | "admin" | "account";
+type View = "today" | "missing" | "records" | "stats" | "schedule" | "admin" | "account";
 type StatsMode = "week" | "month" | "salary" | "custom";
 type ScheduleImportDraft = ScheduleImportCandidate & { enabled: boolean };
 
@@ -47,7 +48,8 @@ function isoFromDate(value: Date): string {
 }
 
 function dateFromIso(value: string): Date {
-  return new Date(`${value}T00:00:00`);
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day, 12);
 }
 
 function addDaysIso(value: string, days: number): string {
@@ -73,6 +75,12 @@ function salaryPeriodFor(value: string): { start: string; end: string } {
   const start = new Date(year, isAfterPeriodStart ? month : month - 1, 15);
   const end = new Date(year, isAfterPeriodStart ? month + 1 : month, 15);
   return { start: isoFromDate(start), end: isoFromDate(end) };
+}
+
+function monthStartIso(value: string): string {
+  const selected = dateFromIso(value);
+  selected.setDate(1);
+  return isoFromDate(selected);
 }
 
 function timeOnly(value: string): string {
@@ -255,6 +263,7 @@ function AuthenticatedApp({ user, onUserChange, onLogout }: { user: User; onUser
         </div>
         <nav aria-label="Main">
           <NavButton active={view === "today"} icon={<ClipboardList />} label="Today" onClick={() => setView("today")} />
+          <NavButton active={view === "missing"} icon={<CalendarDays />} label="Missing" onClick={() => setView("missing")} />
           <NavButton active={view === "records"} icon={<CalendarDays />} label="Records" onClick={() => setView("records")} />
           <NavButton active={view === "stats"} icon={<BarChart3 />} label="Stats" onClick={() => setView("stats")} />
           <NavButton active={view === "schedule"} icon={<Settings />} label="Schedule" onClick={() => setView("schedule")} />
@@ -278,6 +287,7 @@ function AuthenticatedApp({ user, onUserChange, onLogout }: { user: User; onUser
         ) : (
           <>
             {view === "today" && <TodayView {...appData} />}
+            {view === "missing" && <MissingDaysView />}
             {view === "records" && <RecordsView {...appData} />}
             {view === "stats" && <StatsView />}
             {view === "schedule" && <ScheduleView {...appData} />}
@@ -580,22 +590,34 @@ function TodayView({ refresh }: ReturnType<typeof useAppData>) {
   const [date, setDate] = useState(todayIso());
   const [items, setItems] = useState<TodayItem[]>([]);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const latestRequest = useRef(0);
 
-  async function loadToday(showBusy = true) {
+  async function loadToday(targetDate: string, showBusy = true) {
+    const requestId = latestRequest.current + 1;
+    latestRequest.current = requestId;
     if (showBusy) {
       setBusy(true);
     }
     try {
-      setItems(await api.today(date));
+      setError(null);
+      const nextItems = await api.today(targetDate);
+      if (latestRequest.current === requestId) {
+        setItems(nextItems);
+      }
+    } catch (err) {
+      if (latestRequest.current === requestId) {
+        setError(err instanceof Error ? err.message : "Could not load this day");
+      }
     } finally {
-      if (showBusy) {
+      if (showBusy && latestRequest.current === requestId) {
         setBusy(false);
       }
     }
   }
 
   useEffect(() => {
-    void loadToday();
+    void loadToday(date);
   }, [date]);
 
   function recordFromSchedule(item: TodayItem, status: ClassStatus): Partial<ClassRecord> | null {
@@ -625,7 +647,7 @@ function TodayView({ refresh }: ReturnType<typeof useAppData>) {
         await api.createRecord(payload);
       }
     }
-    await Promise.all([loadToday(false), refresh(false)]);
+    await Promise.all([loadToday(date, false), refresh(false)]);
   }
 
   async function markScheduledDay(status: ClassStatus) {
@@ -642,7 +664,7 @@ function TodayView({ refresh }: ReturnType<typeof useAppData>) {
           return payload ? api.createRecord(payload) : Promise.resolve();
         }),
       );
-      await Promise.all([loadToday(false), refresh(false)]);
+      await Promise.all([loadToday(date, false), refresh(false)]);
     } finally {
       setBusy(false);
     }
@@ -661,20 +683,16 @@ function TodayView({ refresh }: ReturnType<typeof useAppData>) {
           <p className="date-heading">{longDateLabel(date)}</p>
         </div>
         <div className="date-controls">
-          <button className="icon-button subtle" type="button" onClick={() => setDate(addDaysIso(date, -1))}>
+          <button className="icon-button subtle" type="button" onClick={() => setDate((current) => addDaysIso(current, -1))}>
             Previous day
           </button>
-          <button className="icon-button subtle" type="button" onClick={() => setDate(addDaysIso(date, 1))}>
+          <button className="icon-button subtle" type="button" onClick={() => setDate((current) => addDaysIso(current, 1))}>
             Next day
           </button>
-          {!isToday && (
-            <button className="icon-button subtle" type="button" onClick={() => setDate(todayIso())}>
-              Today
-            </button>
-          )}
           <input className="control" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
         </div>
       </header>
+      {error && <div className="banner">{error}</div>}
       <div className="summary-strip">
         <strong>{doneCount}</strong>
         <span>confirmed out of {items.length} expected or actual classes</span>
@@ -724,6 +742,98 @@ function TodayView({ refresh }: ReturnType<typeof useAppData>) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function MissingDaysView() {
+  const today = todayIso();
+  const [startDate, setStartDate] = useState(monthStartIso(today));
+  const [endDate, setEndDate] = useState(today);
+  const [days, setDays] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const latestRequest = useRef(0);
+
+  useEffect(() => {
+    const requestId = latestRequest.current + 1;
+    latestRequest.current = requestId;
+    setLoading(true);
+    setError(null);
+    api.missingDays(startDate, endDate)
+      .then((nextDays) => {
+        if (latestRequest.current === requestId) {
+          setDays(nextDays);
+        }
+      })
+      .catch((err) => {
+        if (latestRequest.current === requestId) {
+          setError(err instanceof Error ? err.message : "Could not load missing days");
+        }
+      })
+      .finally(() => {
+        if (latestRequest.current === requestId) {
+          setLoading(false);
+        }
+      });
+  }, [startDate, endDate]);
+
+  function chooseCurrentMonth() {
+    const nextToday = todayIso();
+    setStartDate(monthStartIso(nextToday));
+    setEndDate(nextToday);
+  }
+
+  function chooseCurrentSalary() {
+    const period = salaryPeriodFor(todayIso());
+    setStartDate(period.start);
+    setEndDate(period.end);
+  }
+
+  return (
+    <div className="view">
+      <header className="view-header">
+        <div>
+          <p className="eyebrow">Follow-up</p>
+          <h2>Missing Days</h2>
+          <p className="date-heading">Scheduled teaching days with no class records yet.</p>
+        </div>
+      </header>
+      <div className="toolbar-form">
+        <label className="field compact">
+          <span>Start</span>
+          <input className="control" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+        </label>
+        <label className="field compact">
+          <span>End</span>
+          <input className="control" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+        </label>
+        <button className="icon-button subtle" type="button" onClick={chooseCurrentMonth}>
+          This month
+        </button>
+        <button className="icon-button subtle" type="button" onClick={chooseCurrentSalary}>
+          Salary period
+        </button>
+      </div>
+      {error && <div className="banner">{error}</div>}
+      <div className="summary-strip">
+        <strong>{days.length}</strong>
+        <span>days still need records in this range</span>
+      </div>
+      {loading ? (
+        <div className="loading">Checking missing teaching days...</div>
+      ) : days.length === 0 ? (
+        <EmptyState text="No missing scheduled days in this range." />
+      ) : (
+        <div className="missing-days-list">
+          {days.map((day) => (
+            <article className="missing-day-row" key={day}>
+              <strong>{longDateLabel(day)}</strong>
+              <p>{day}</p>
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

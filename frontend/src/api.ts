@@ -103,6 +103,8 @@ export const api = {
   deleteRecord: (id: number) => request<void>(`/records/${id}`, { method: "DELETE" }),
 
   today: (date?: string) => request<TodayItem[]>(`/today${date ? `?target_date=${date}` : ""}`),
+  missingDays: (startDate: string, endDate: string) =>
+    request<string[]>(`/missing-days?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`),
   stats: (params: StatsParams = {}) => {
     const query = new URLSearchParams();
     query.set("range", params.range ?? "month");

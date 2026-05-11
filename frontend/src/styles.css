@@ -297,21 +297,40 @@ nav {
 }
 
 .today-list,
-.schedule-grid {
+.schedule-grid,
+.missing-days-list {
   display: grid;
   gap: 10px;
 }
 
 .class-row,
-.schedule-item {
+.schedule-item,
+.missing-day-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 14px;
   border: 1px solid #dce3df;
   border-radius: 8px;
   padding: 14px;
   background: white;
+}
+
+.class-row,
+.schedule-item {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.missing-day-row {
+  gap: 6px;
+}
+
+.missing-day-row strong {
+  font-size: 1rem;
+}
+
+.missing-day-row p {
+  margin: 0;
+  color: #667275;
 }
 
 .class-main h3,

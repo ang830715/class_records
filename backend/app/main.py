@@ -134,6 +134,10 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
+def normalize_class_name(name: str) -> str:
+    return " ".join(name.strip().split())
+
+
 def ensure_email_available(db: Session, email: str, exclude_user_id: int | None = None) -> str:
     next_email = normalize_email(email)
     query = select(User).where(func.lower(User.email) == next_email)
@@ -205,6 +209,36 @@ def get_or_404(db: Session, model: type, item_id: int):
     return item
 
 
+def class_query(user_id: int) -> Select[tuple[TeachingClass]]:
+    return select(TeachingClass).where(TeachingClass.user_id == user_id).order_by(TeachingClass.name)
+
+
+def get_owned_class_or_404(db: Session, class_id: int, user_id: int) -> TeachingClass:
+    item = db.get(TeachingClass, class_id)
+    if item is None or item.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    return item
+
+
+def ensure_class_name_available(
+    db: Session,
+    user_id: int,
+    name: str,
+    exclude_class_id: int | None = None,
+) -> str:
+    next_name = normalize_class_name(name)
+    query = select(TeachingClass).where(
+        TeachingClass.user_id == user_id,
+        func.lower(TeachingClass.name) == next_name.lower(),
+    )
+    if exclude_class_id is not None:
+        query = query.where(TeachingClass.id != exclude_class_id)
+    existing = db.scalar(query)
+    if existing is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Class name already exists")
+    return next_name
+
+
 def schedule_query(user_id: int = 1) -> Select[tuple[ScheduleRule]]:
     return (
         select(ScheduleRule)
@@ -230,12 +264,17 @@ def health() -> dict[str, str]:
 
 @app.get("/classes", response_model=list[TeachingClassRead])
 def list_classes(db: DbSession, current_user: CurrentUser) -> list[TeachingClass]:
-    return list(db.scalars(select(TeachingClass).order_by(TeachingClass.name)))
+    return list(db.scalars(class_query(current_user.id)))
 
 
 @app.post("/classes", response_model=TeachingClassRead, status_code=status.HTTP_201_CREATED)
 def create_class(payload: TeachingClassCreate, db: DbSession, current_user: CurrentUser) -> TeachingClass:
-    item = TeachingClass(**payload.model_dump())
+    item = TeachingClass(
+        user_id=current_user.id,
+        name=ensure_class_name_available(db, current_user.id, payload.name),
+        classroom=payload.classroom,
+        notes=payload.notes,
+    )
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -244,9 +283,14 @@ def create_class(payload: TeachingClassCreate, db: DbSession, current_user: Curr
 
 @app.put("/classes/{class_id}", response_model=TeachingClassRead)
 def update_class(class_id: int, payload: TeachingClassUpdate, db: DbSession, current_user: CurrentUser) -> TeachingClass:
-    item = get_or_404(db, TeachingClass, class_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(item, key, value)
+    item = get_owned_class_or_404(db, class_id, current_user.id)
+    values = payload.model_dump(exclude_unset=True)
+    if "name" in values and values["name"] is not None:
+        item.name = ensure_class_name_available(db, current_user.id, values["name"], exclude_class_id=item.id)
+    if "classroom" in values:
+        item.classroom = values["classroom"]
+    if "notes" in values:
+        item.notes = values["notes"]
     db.commit()
     db.refresh(item)
     return item
@@ -254,7 +298,7 @@ def update_class(class_id: int, payload: TeachingClassUpdate, db: DbSession, cur
 
 @app.delete("/classes/{class_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_class(class_id: int, db: DbSession, current_user: CurrentUser) -> None:
-    db.delete(get_or_404(db, TeachingClass, class_id))
+    db.delete(get_owned_class_or_404(db, class_id, current_user.id))
     db.commit()
 
 
@@ -267,7 +311,7 @@ def list_schedule(db: DbSession, current_user: CurrentUser) -> list[ScheduleRule
 def create_schedule_rule(payload: ScheduleRuleCreate, db: DbSession, current_user: CurrentUser) -> ScheduleRule:
     if payload.active_until and payload.active_until < payload.active_from:
         raise HTTPException(status_code=400, detail="active_until must be after active_from")
-    get_or_404(db, TeachingClass, payload.teaching_class_id)
+    get_owned_class_or_404(db, payload.teaching_class_id, current_user.id)
     values = payload.model_dump()
     values["user_id"] = current_user.id
     item = ScheduleRule(**values)
@@ -283,7 +327,7 @@ def update_schedule_rule(rule_id: int, payload: ScheduleRuleUpdate, db: DbSessio
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     values = payload.model_dump(exclude_unset=True)
     if "teaching_class_id" in values and values["teaching_class_id"] is not None:
-        get_or_404(db, TeachingClass, values["teaching_class_id"])
+        get_owned_class_or_404(db, values["teaching_class_id"], current_user.id)
     active_from = values.get("active_from", item.active_from)
     active_until = values.get("active_until", item.active_until)
     if active_until and active_until < active_from:
@@ -344,7 +388,7 @@ def list_records(
 
 @app.post("/records", response_model=ClassRecordRead, status_code=status.HTTP_201_CREATED)
 def create_record(payload: ClassRecordCreate, db: DbSession, current_user: CurrentUser) -> ClassRecord:
-    get_or_404(db, TeachingClass, payload.teaching_class_id)
+    get_owned_class_or_404(db, payload.teaching_class_id, current_user.id)
     if payload.schedule_rule_id is not None:
         rule = get_or_404(db, ScheduleRule, payload.schedule_rule_id)
         if rule.user_id != current_user.id:
@@ -364,7 +408,7 @@ def update_record(record_id: int, payload: ClassRecordUpdate, db: DbSession, cur
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     values = payload.model_dump(exclude_unset=True)
     if "teaching_class_id" in values and values["teaching_class_id"] is not None:
-        get_or_404(db, TeachingClass, values["teaching_class_id"])
+        get_owned_class_or_404(db, values["teaching_class_id"], current_user.id)
     if "schedule_rule_id" in values and values["schedule_rule_id"] is not None:
         rule = get_or_404(db, ScheduleRule, values["schedule_rule_id"])
         if rule.user_id != current_user.id:

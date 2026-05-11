@@ -13,6 +13,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from app.database import Base, engine  # noqa: E402
 from app.models import ScheduleRule, TeachingClass, User  # noqa: E402
+from app.schema_management import ensure_runtime_columns  # noqa: E402
 
 
 USER_ID = 1
@@ -55,11 +56,13 @@ def ensure_user(db: Session) -> None:
 def ensure_classes(db: Session) -> dict[str, TeachingClass]:
     classes_by_name = {
         item.name: item
-        for item in db.scalars(select(TeachingClass).where(TeachingClass.name.in_(CLASSES)))
+        for item in db.scalars(
+            select(TeachingClass).where(TeachingClass.user_id == USER_ID, TeachingClass.name.in_(CLASSES))
+        )
     }
     for name in CLASSES:
         if name not in classes_by_name:
-            item = TeachingClass(name=name, classroom=None, notes=None)
+            item = TeachingClass(user_id=USER_ID, name=name, classroom=None, notes=None)
             db.add(item)
             db.flush()
             classes_by_name[name] = item
@@ -68,6 +71,7 @@ def ensure_classes(db: Session) -> dict[str, TeachingClass]:
 
 def seed_schedule(active_from: date, duration_minutes: int) -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_runtime_columns(engine)
     created = 0
     updated = 0
 
