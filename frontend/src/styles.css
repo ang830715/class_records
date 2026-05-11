@@ -20,6 +20,12 @@ select {
   font: inherit;
 }
 
+button:disabled,
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
@@ -101,6 +107,11 @@ nav {
   padding: 0 13px;
   color: #182224;
   background: #e5ebdf;
+}
+
+.nav-button:disabled,
+.icon-button:disabled {
+  opacity: 0.55;
 }
 
 .icon-button.wide {
@@ -429,6 +440,13 @@ nav {
   margin: 0 0 2px;
   color: #2f3b3e;
   font-size: 0.95rem;
+}
+
+.form-help {
+  flex: 1 0 100%;
+  margin: -2px 0 0;
+  color: #667275;
+  font-size: 0.88rem;
 }
 
 .field {

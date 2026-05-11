@@ -37,7 +37,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     localStorage.removeItem(AUTH_TOKEN_KEY);
   }
   if (!response.ok) {
-    const message = await response.text();
+    const rawText = await response.text();
+    let message = rawText;
+    try {
+      const parsed = JSON.parse(rawText) as { detail?: string };
+      if (typeof parsed.detail === "string" && parsed.detail) {
+        message = parsed.detail;
+      }
+    } catch {
+      // Keep the original response text when it is not JSON.
+    }
     throw new Error(message || `Request failed: ${response.status}`);
   }
   if (response.status === 204) {

@@ -448,21 +448,32 @@ function AdminView({ currentUser }: { currentUser: User }) {
 
   async function createTeacher(event: React.FormEvent) {
     event.preventDefault();
-    if (!newUser.name.trim() || !newUser.email.trim() || newUser.password.length < 8) return;
+    const trimmedName = newUser.name.trim();
+    const trimmedEmail = newUser.email.trim();
+    if (!trimmedName || !trimmedEmail) {
+      setError("Name and email are required.");
+      setMessage(null);
+      return;
+    }
+    if (newUser.password.length < 8) {
+      setError("Temporary password must be at least 8 characters.");
+      setMessage(null);
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
-      await api.createAdminUser({
-        name: newUser.name.trim(),
-        email: newUser.email.trim(),
+      const created = await api.createAdminUser({
+        name: trimmedName,
+        email: trimmedEmail,
         password: newUser.password,
         is_admin: newUser.is_admin,
         is_active: true,
       });
+      setUsers((currentUsers) => [created, ...currentUsers]);
       setNewUser({ name: "", email: "", password: "", is_admin: false });
       setMessage("Teacher account created.");
-      await loadUsers(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create teacher");
     } finally {
@@ -520,15 +531,16 @@ function AdminView({ currentUser }: { currentUser: User }) {
         </label>
         <label className="field">
           <span>Temporary password</span>
-          <input className="control" type="password" minLength={8} value={newUser.password} onChange={(event) => setNewUser({ ...newUser, password: event.target.value })} />
+          <input className="control" type="text" autoComplete="off" minLength={8} value={newUser.password} onChange={(event) => setNewUser({ ...newUser, password: event.target.value })} />
         </label>
+        <p className="form-help">Temporary passwords are shown here so you can copy them. Minimum 8 characters.</p>
         <label className="checkbox-field">
           <input type="checkbox" checked={newUser.is_admin} onChange={(event) => setNewUser({ ...newUser, is_admin: event.target.checked })} />
           Admin
         </label>
-        <button className="icon-button primary" type="submit" disabled={busy || !newUser.name.trim() || !newUser.email.trim() || newUser.password.length < 8}>
+        <button className="icon-button primary" type="submit" disabled={busy}>
           <Plus size={18} />
-          Create
+          {busy ? "Creating..." : "Create"}
         </button>
       </form>
       {loading ? (
@@ -542,7 +554,7 @@ function AdminView({ currentUser }: { currentUser: User }) {
                 <th>Email</th>
                 <th>Admin</th>
                 <th>Active</th>
-                <th>Reset password</th>
+                <th>Set temporary password</th>
               </tr>
             </thead>
             <tbody>
@@ -565,14 +577,15 @@ function AdminView({ currentUser }: { currentUser: User }) {
                     <div className="reset-password-cell">
                       <input
                         className="inline-text"
-                        type="password"
-                        placeholder="New password"
+                        type="text"
+                        autoComplete="off"
+                        placeholder="Type temporary password"
                         value={resetPasswords[user.id] ?? ""}
                         onChange={(event) => setResetPasswords({ ...resetPasswords, [user.id]: event.target.value })}
                       />
                       <button className="icon-button subtle" type="button" disabled={(resetPasswords[user.id] ?? "").length < 8} onClick={() => resetPassword(user)}>
                         <KeyRound size={16} />
-                        Reset
+                        Save
                       </button>
                     </div>
                   </td>
@@ -582,6 +595,7 @@ function AdminView({ currentUser }: { currentUser: User }) {
           </table>
         </div>
       )}
+      <p className="form-help">Type a new temporary password for a teacher, then click Save. The field stays visible so you can share it accurately.</p>
     </div>
   );
 }
