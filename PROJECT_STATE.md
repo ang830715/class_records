@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
 
 This file is a handoff note for future conversations. It summarizes what has already been built and what assumptions are currently true.
 
@@ -21,6 +21,7 @@ Today
 Records
 Stats
 Schedule
+Admin
 Account
 ```
 
@@ -146,6 +147,15 @@ Change password
 Sign out
 ```
 
+Admin page features:
+
+```text
+Create teacher accounts
+List teacher accounts
+Toggle active/admin access
+Reset teacher passwords
+```
+
 Password reset helper:
 
 ```bash
@@ -200,6 +210,7 @@ Important limitation:
 
 ```text
 TeachingClass is still global. Before true multi-user support, decide whether class names should be shared globally or owned per user.
+Admin-created teachers get isolated schedule and record rows, but they currently share the global TeachingClass catalog.
 ```
 
 Schedule reset behavior:

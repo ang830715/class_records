@@ -6,6 +6,7 @@ import {
   Check,
   ClipboardList,
   LogOut,
+  KeyRound,
   Plus,
   RefreshCcw,
   Save,
@@ -13,6 +14,7 @@ import {
   Trash2,
   Upload,
   UserCircle,
+  Users,
   X,
 } from "lucide-react";
 
@@ -20,7 +22,7 @@ import { api } from "./api";
 import type { ClassRecord, ClassStatus, ScheduleImportCandidate, ScheduleRule, Stats, TeachingClass, TodayItem, User } from "./types";
 import "./styles.css";
 
-type View = "today" | "records" | "stats" | "schedule" | "account";
+type View = "today" | "records" | "stats" | "schedule" | "admin" | "account";
 type StatsMode = "week" | "month" | "salary" | "custom";
 type ScheduleImportDraft = ScheduleImportCandidate & { enabled: boolean };
 
@@ -46,6 +48,12 @@ function isoFromDate(value: Date): string {
 
 function dateFromIso(value: string): Date {
   return new Date(`${value}T00:00:00`);
+}
+
+function addDaysIso(value: string, days: number): string {
+  const nextDate = dateFromIso(value);
+  nextDate.setDate(nextDate.getDate() + days);
+  return isoFromDate(nextDate);
 }
 
 function longDateLabel(value: string): string {
@@ -250,6 +258,7 @@ function AuthenticatedApp({ user, onUserChange, onLogout }: { user: User; onUser
           <NavButton active={view === "records"} icon={<CalendarDays />} label="Records" onClick={() => setView("records")} />
           <NavButton active={view === "stats"} icon={<BarChart3 />} label="Stats" onClick={() => setView("stats")} />
           <NavButton active={view === "schedule"} icon={<Settings />} label="Schedule" onClick={() => setView("schedule")} />
+          {user.is_admin && <NavButton active={view === "admin"} icon={<Users />} label="Admin" onClick={() => setView("admin")} />}
           <NavButton active={view === "account"} icon={<UserCircle />} label="Account" onClick={() => setView("account")} />
         </nav>
         <button className="icon-button wide" onClick={() => appData.refresh()} title="Refresh">
@@ -272,6 +281,7 @@ function AuthenticatedApp({ user, onUserChange, onLogout }: { user: User; onUser
             {view === "records" && <RecordsView {...appData} />}
             {view === "stats" && <StatsView />}
             {view === "schedule" && <ScheduleView {...appData} />}
+            {view === "admin" && user.is_admin && <AdminView currentUser={user} />}
             {view === "account" && <AccountView user={user} onUserChange={onUserChange} onLogout={onLogout} />}
           </>
         )}
@@ -397,6 +407,175 @@ function AccountView({ user, onUserChange, onLogout }: { user: User; onUserChang
   );
 }
 
+function AdminView({ currentUser }: { currentUser: User }) {
+  const [users, setUsers] = useState<User[]>([]);
+  const [newUser, setNewUser] = useState({ name: "", email: "", password: "", is_admin: false });
+  const [resetPasswords, setResetPasswords] = useState<Record<number, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadUsers(showLoading = true) {
+    if (showLoading) {
+      setLoading(true);
+    }
+    setError(null);
+    try {
+      setUsers(await api.adminUsers());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load teachers");
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+    }
+  }
+
+  useEffect(() => {
+    void loadUsers();
+  }, []);
+
+  async function createTeacher(event: React.FormEvent) {
+    event.preventDefault();
+    if (!newUser.name.trim() || !newUser.email.trim() || newUser.password.length < 8) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await api.createAdminUser({
+        name: newUser.name.trim(),
+        email: newUser.email.trim(),
+        password: newUser.password,
+        is_admin: newUser.is_admin,
+        is_active: true,
+      });
+      setNewUser({ name: "", email: "", password: "", is_admin: false });
+      setMessage("Teacher account created.");
+      await loadUsers(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create teacher");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function updateTeacher(id: number, body: Partial<Pick<User, "name" | "email" | "is_admin" | "is_active">>) {
+    setError(null);
+    setMessage(null);
+    try {
+      await api.updateAdminUser(id, body);
+      setMessage("Teacher account updated.");
+      await loadUsers(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update teacher");
+      await loadUsers(false);
+    }
+  }
+
+  async function resetPassword(user: User) {
+    const nextPassword = resetPasswords[user.id] ?? "";
+    if (nextPassword.length < 8) return;
+    setError(null);
+    setMessage(null);
+    try {
+      await api.resetAdminUserPassword(user.id, nextPassword);
+      setResetPasswords((passwords) => ({ ...passwords, [user.id]: "" }));
+      setMessage(`Password reset for ${user.name}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reset password");
+    }
+  }
+
+  return (
+    <div className="view">
+      <header className="view-header">
+        <div>
+          <p className="eyebrow">Teacher access</p>
+          <h2>Admin</h2>
+          <p className="date-heading">Create teacher logins and manage account access.</p>
+        </div>
+      </header>
+      {error && <div className="banner">{error}</div>}
+      {message && <div className="success-banner">{message}</div>}
+      <form className="toolbar-form schedule-form" onSubmit={createTeacher}>
+        <h3 className="form-title">Add teacher</h3>
+        <label className="field">
+          <span>Name</span>
+          <input className="control" value={newUser.name} onChange={(event) => setNewUser({ ...newUser, name: event.target.value })} />
+        </label>
+        <label className="field">
+          <span>Email</span>
+          <input className="control" type="email" value={newUser.email} onChange={(event) => setNewUser({ ...newUser, email: event.target.value })} />
+        </label>
+        <label className="field">
+          <span>Temporary password</span>
+          <input className="control" type="password" minLength={8} value={newUser.password} onChange={(event) => setNewUser({ ...newUser, password: event.target.value })} />
+        </label>
+        <label className="checkbox-field">
+          <input type="checkbox" checked={newUser.is_admin} onChange={(event) => setNewUser({ ...newUser, is_admin: event.target.checked })} />
+          Admin
+        </label>
+        <button className="icon-button primary" type="submit" disabled={busy || !newUser.name.trim() || !newUser.email.trim() || newUser.password.length < 8}>
+          <Plus size={18} />
+          Create
+        </button>
+      </form>
+      {loading ? (
+        <div className="loading">Loading teacher accounts...</div>
+      ) : (
+        <div className="table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Admin</th>
+                <th>Active</th>
+                <th>Reset password</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((user) => (
+                <tr key={user.id}>
+                  <td>
+                    <input className="inline-text" defaultValue={user.name} onBlur={(event) => updateTeacher(user.id, { name: event.target.value })} />
+                    {user.id === currentUser.id && <span className="self-tag">You</span>}
+                  </td>
+                  <td>
+                    <input className="inline-text email-cell" defaultValue={user.email ?? ""} onBlur={(event) => updateTeacher(user.id, { email: event.target.value })} />
+                  </td>
+                  <td>
+                    <input type="checkbox" checked={user.is_admin} onChange={(event) => updateTeacher(user.id, { is_admin: event.target.checked })} />
+                  </td>
+                  <td>
+                    <input type="checkbox" checked={user.is_active} onChange={(event) => updateTeacher(user.id, { is_active: event.target.checked })} />
+                  </td>
+                  <td>
+                    <div className="reset-password-cell">
+                      <input
+                        className="inline-text"
+                        type="password"
+                        placeholder="New password"
+                        value={resetPasswords[user.id] ?? ""}
+                        onChange={(event) => setResetPasswords({ ...resetPasswords, [user.id]: event.target.value })}
+                      />
+                      <button className="icon-button subtle" type="button" disabled={(resetPasswords[user.id] ?? "").length < 8} onClick={() => resetPassword(user)}>
+                        <KeyRound size={16} />
+                        Reset
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TodayView({ refresh }: ReturnType<typeof useAppData>) {
   const [date, setDate] = useState(todayIso());
   const [items, setItems] = useState<TodayItem[]>([]);
@@ -478,10 +657,16 @@ function TodayView({ refresh }: ReturnType<typeof useAppData>) {
       <header className="view-header">
         <div>
           <p className="eyebrow">Daily check</p>
-          <h2>Today</h2>
+          <h2>{isToday ? "Today" : "Selected day"}</h2>
           <p className="date-heading">{longDateLabel(date)}</p>
         </div>
         <div className="date-controls">
+          <button className="icon-button subtle" type="button" onClick={() => setDate(addDaysIso(date, -1))}>
+            Previous day
+          </button>
+          <button className="icon-button subtle" type="button" onClick={() => setDate(addDaysIso(date, 1))}>
+            Next day
+          </button>
           {!isToday && (
             <button className="icon-button subtle" type="button" onClick={() => setDate(todayIso())}>
               Today

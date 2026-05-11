@@ -62,6 +62,19 @@ export const api = {
   updatePassword: (body: { current_password: string; new_password: string }) =>
     request<void>("/auth/password", { method: "PUT", body: JSON.stringify(body) }),
 
+  adminUsers: () => request<User[]>("/admin/users"),
+  createAdminUser: (body: {
+    name: string;
+    email: string;
+    password: string;
+    is_admin?: boolean;
+    is_active?: boolean;
+  }) => request<User>("/admin/users", { method: "POST", body: JSON.stringify(body) }),
+  updateAdminUser: (id: number, body: Partial<Pick<User, "name" | "email" | "is_admin" | "is_active">>) =>
+    request<User>(`/admin/users/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  resetAdminUserPassword: (id: number, new_password: string) =>
+    request<void>(`/admin/users/${id}/password`, { method: "PUT", body: JSON.stringify({ new_password }) }),
+
   classes: () => request<TeachingClass[]>("/classes"),
   createClass: (body: Partial<TeachingClass>) =>
     request<TeachingClass>("/classes", { method: "POST", body: JSON.stringify(body) }),

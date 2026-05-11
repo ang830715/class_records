@@ -17,6 +17,7 @@ class UserRead(BaseModel):
     name: str
     email: str | None
     is_active: bool
+    is_admin: bool
     created_at: DateTime
 
 
@@ -38,6 +39,25 @@ class AccountUpdate(BaseModel):
 
 class PasswordUpdate(BaseModel):
     current_password: str = Field(min_length=1, max_length=255)
+    new_password: str = Field(min_length=8, max_length=255)
+
+
+class AdminUserCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=255)
+    is_admin: bool = False
+    is_active: bool = True
+
+
+class AdminUserUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    email: str | None = Field(default=None, min_length=3, max_length=255)
+    is_admin: bool | None = None
+    is_active: bool | None = None
+
+
+class AdminPasswordReset(BaseModel):
     new_password: str = Field(min_length=8, max_length=255)
 
 

@@ -19,6 +19,11 @@ def ensure_runtime_columns(engine: Engine) -> None:
             statements.append("ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE")
         else:
             statements.append("ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1")
+    if "is_admin" not in columns:
+        if dialect == "postgresql":
+            statements.append("ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE")
+        else:
+            statements.append("ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0")
 
     if not statements:
         return

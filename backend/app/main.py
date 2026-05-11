@@ -16,6 +16,9 @@ from .schedule_import import extract_schedule_from_image
 from .schema_management import ensure_runtime_columns
 from .schemas import (
     AccountUpdate,
+    AdminPasswordReset,
+    AdminUserCreate,
+    AdminUserUpdate,
     AuthTokenRead,
     ClassRecordCreate,
     ClassRecordRead,
@@ -40,6 +43,15 @@ from .schemas import (
 
 DbSession = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def require_admin_user(current_user: CurrentUser) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
+
+
+AdminUser = Annotated[User, Depends(require_admin_user)]
 
 cors_origins = [
     origin.strip()
@@ -68,10 +80,11 @@ def on_startup() -> None:
         initial_password = getenv("INITIAL_ADMIN_PASSWORD")
         initial_name = getenv("INITIAL_ADMIN_NAME", "Teacher")
         if user is None:
-            user = User(id=1, name=initial_name, email=initial_email, is_active=True)
+            user = User(id=1, name=initial_name, email=initial_email, is_active=True, is_admin=True)
             db.add(user)
         else:
             user.name = user.name or initial_name
+            user.is_admin = True
             if initial_email and not user.email:
                 user.email = initial_email
         if initial_password and not user.password_hash:
@@ -114,6 +127,74 @@ def update_password(payload: PasswordUpdate, db: DbSession, current_user: Curren
     if not verify_password(payload.current_password, current_user.password_hash):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
     current_user.password_hash = hash_password(payload.new_password)
+    db.commit()
+
+
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def ensure_email_available(db: Session, email: str, exclude_user_id: int | None = None) -> str:
+    next_email = normalize_email(email)
+    query = select(User).where(func.lower(User.email) == next_email)
+    if exclude_user_id is not None:
+        query = query.where(User.id != exclude_user_id)
+    existing = db.scalar(query)
+    if existing is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is already in use")
+    return next_email
+
+
+@app.get("/admin/users", response_model=list[UserRead])
+def list_admin_users(db: DbSession, current_user: AdminUser) -> list[User]:
+    return list(db.scalars(select(User).order_by(User.created_at.desc(), User.id.desc())))
+
+
+@app.post("/admin/users", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+def create_admin_user(payload: AdminUserCreate, db: DbSession, current_user: AdminUser) -> User:
+    item = User(
+        name=payload.name.strip(),
+        email=ensure_email_available(db, payload.email),
+        password_hash=hash_password(payload.password),
+        is_admin=payload.is_admin,
+        is_active=payload.is_active,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.put("/admin/users/{user_id}", response_model=UserRead)
+def update_admin_user(user_id: int, payload: AdminUserUpdate, db: DbSession, current_user: AdminUser) -> User:
+    item = get_or_404(db, User, user_id)
+    values = payload.model_dump(exclude_unset=True)
+    if item.id == current_user.id and values.get("is_active") is False:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot deactivate your own account")
+    if item.id == current_user.id and values.get("is_admin") is False:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot remove your own admin access")
+    if "email" in values and values["email"] is not None:
+        item.email = ensure_email_available(db, values["email"], exclude_user_id=item.id)
+    if "name" in values and values["name"] is not None:
+        item.name = values["name"].strip()
+    if "is_active" in values and values["is_active"] is not None:
+        item.is_active = values["is_active"]
+    if "is_admin" in values and values["is_admin"] is not None:
+        item.is_admin = values["is_admin"]
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.put("/admin/users/{user_id}/password", status_code=status.HTTP_204_NO_CONTENT)
+def reset_admin_user_password(
+    user_id: int,
+    payload: AdminPasswordReset,
+    db: DbSession,
+    current_user: AdminUser,
+) -> None:
+    item = get_or_404(db, User, user_id)
+    item.password_hash = hash_password(payload.new_password)
     db.commit()
 
 

@@ -7,6 +7,7 @@ The key rule is simple: **`ClassRecord` is the source of truth**. Schedule rules
 ## Features
 
 - Password login with signed bearer tokens
+- Admin-only teacher account creation and password reset
 - Account page for updating display name, email, and password
 - Manage teaching classes such as `PA4`
 - Store each class's usual classroom and notes
@@ -191,6 +192,8 @@ POST /auth/login    returns a signed bearer token
 GET /auth/me        returns the logged-in user
 PUT /auth/me        updates display name and email
 PUT /auth/password  changes password
+GET /admin/users    lists teacher accounts for admins
+POST /admin/users   creates teacher accounts for admins
 ```
 
 The token is stored in browser `localStorage` by the current frontend. This is a simple first auth layer; a future hardening step would be HttpOnly cookie sessions.
