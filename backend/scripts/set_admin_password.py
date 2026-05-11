@@ -5,6 +5,7 @@ import getpass
 import sys
 from pathlib import Path
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -15,6 +16,10 @@ from app.auth import hash_password  # noqa: E402
 from app.database import Base, engine  # noqa: E402
 from app.models import User  # noqa: E402
 from app.schema_management import ensure_runtime_columns  # noqa: E402
+
+
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
 
 
 def main() -> None:
@@ -32,18 +37,20 @@ def main() -> None:
     ensure_runtime_columns(engine)
 
     with Session(engine) as db:
-        user = db.get(User, 1)
+        normalized_email = normalize_email(args.email)
+        user = db.scalar(select(User).where(func.lower(User.email) == normalized_email))
         if user is None:
-            user = User(id=1, name=args.name, email=args.email, is_active=True)
+            user = User(name=args.name, email=normalized_email, is_active=True, is_admin=True)
             db.add(user)
         else:
             user.name = args.name
-            user.email = args.email
+            user.email = normalized_email
             user.is_active = True
+            user.is_admin = True
         user.password_hash = hash_password(password)
         db.commit()
 
-    print(f"Admin login updated for {args.email}")
+    print(f"Admin login updated for {normalized_email}")
 
 
 if __name__ == "__main__":

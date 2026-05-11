@@ -42,10 +42,10 @@ As of the latest local work:
 - Production is intended to use PostgreSQL.
 - Local development uses SQLite through `scripts/start-dev.ps1`.
 - App routes are protected by login except `/health`, `/auth/login`, and `/auth/me` when checking an existing token.
-- The frontend includes **Today**, **Records**, **Stats**, **Schedule**, **Admin**, and **Account** views.
+- The frontend includes **Today**, **Missing**, **Records**, **Stats**, **Schedule**, **Admin**, and **Account** views.
 - The Schedule page includes AI timetable screenshot import by file upload or pasted screenshot. It has been tested successfully once on production with the configured third-party provider.
 - The Admin page creates teacher accounts, toggles active/admin access, and resets teacher passwords.
-- The first/default user is still `User(id=1)`; future multi-user support should build from the current `current_user.id` route wiring.
+- `TeachingClass`, `ScheduleRule`, `ClassRecord`, and `Semester` are now teacher-owned.
 - There are no Alembic migrations yet. `backend/app/schema_management.py` contains a small runtime compatibility helper for the new auth columns.
 - The latest high-level handoff is in `PROJECT_STATE.md`.
 
@@ -89,7 +89,6 @@ class_records/
       schemas.py
     scripts/
       check_database.py
-      seed_schedule.py
       set_admin_password.py
     requirements.txt
   deploy/
@@ -198,28 +197,6 @@ POST /admin/users   creates teacher accounts for admins
 ```
 
 The token is stored in browser `localStorage` by the current frontend. This is a simple first auth layer; a future hardening step would be HttpOnly cookie sessions.
-
-## Real Schedule Seed
-
-The real weekly timetable can be inserted with:
-
-```powershell
-cd backend
-$env:DATABASE_URL="sqlite:///./dev.db"
-.\.venv\Scripts\python.exe scripts\seed_schedule.py
-```
-
-The seed script is safe to run more than once. It creates or updates the expected weekly lessons and does not duplicate matching rules.
-
-On the deployed server, run:
-
-```bash
-cd /opt/class_records/app/backend
-export DATABASE_URL=postgresql+psycopg://class_records:CHANGE_ME@127.0.0.1:5432/class_records
-/opt/class_records/py311/bin/python scripts/check_database.py
-/opt/class_records/py311/bin/python scripts/seed_schedule.py
-systemctl restart class-records
-```
 
 ## Deployment Status
 

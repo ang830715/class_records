@@ -487,56 +487,6 @@ After uploading, hard refresh the browser:
 Ctrl + F5
 ```
 
-## Seeding The Real Weekly Schedule
-
-The app includes a repeatable seed script for the real teaching timetable:
-
-```text
-backend/scripts/seed_schedule.py
-```
-
-It creates these classes if missing:
-
-```text
-3.5B, PA4, A2-4, PreDP4, A2-3, A2-1
-```
-
-It also creates or updates the Monday-Friday schedule rules. Running it more than once is safe; it updates existing matching rules instead of duplicating them.
-
-Default behavior:
-
-```text
-active_from: 2026-01-01
-duration_minutes: 45
-```
-
-Run locally against local SQLite:
-
-```powershell
-cd "C:\Users\Ang Li\Desktop\coding\class_records\backend"
-$env:DATABASE_URL="sqlite:///./dev.db"
-.\.venv\Scripts\python.exe scripts\seed_schedule.py
-```
-
-Run on the server against the deployed PostgreSQL database:
-
-```bash
-cd /opt/class_records/app/backend
-export DATABASE_URL=postgresql+psycopg://class_records:CHANGE_ME@127.0.0.1:5432/class_records
-/opt/class_records/py311/bin/python scripts/check_database.py
-/opt/class_records/py311/bin/python scripts/seed_schedule.py
-systemctl restart class-records
-```
-
-If one period should count as 60 minutes instead of 45, run:
-
-```bash
-cd /opt/class_records/app/backend
-export DATABASE_URL=postgresql+psycopg://class_records:CHANGE_ME@127.0.0.1:5432/class_records
-/opt/class_records/py311/bin/python scripts/seed_schedule.py --duration-minutes 60
-systemctl restart class-records
-```
-
 ## Useful Commands
 
 Backend service:

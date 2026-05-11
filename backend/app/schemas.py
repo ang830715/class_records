@@ -84,7 +84,6 @@ class TeachingClassRead(TeachingClassBase):
 
 
 class ScheduleRuleBase(BaseModel):
-    user_id: int = 1
     teaching_class_id: int
     weekday: int = Field(ge=0, le=6)
     start_time: Time
@@ -114,6 +113,7 @@ class ScheduleRuleRead(ScheduleRuleBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    user_id: int
     teaching_class: TeachingClassRead
 
 
@@ -157,7 +157,6 @@ class ScheduleImportResult(BaseModel):
 
 
 class ClassRecordBase(BaseModel):
-    user_id: int = 1
     schedule_rule_id: int | None = None
     teaching_class_id: int
     classroom: str | None = Field(default=None, max_length=120)
@@ -189,6 +188,7 @@ class ClassRecordRead(ClassRecordBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    user_id: int
     created_at: DateTime
     updated_at: DateTime
     teaching_class: TeachingClassRead
@@ -208,6 +208,7 @@ class SemesterRead(SemesterBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    user_id: int
 
 
 class TodayItem(BaseModel):

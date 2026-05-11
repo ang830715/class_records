@@ -75,21 +75,10 @@ def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
     ensure_runtime_columns(engine)
     with Session(engine) as db:
-        user = db.get(User, 1)
         initial_email = getenv("INITIAL_ADMIN_EMAIL")
         initial_password = getenv("INITIAL_ADMIN_PASSWORD")
         initial_name = getenv("INITIAL_ADMIN_NAME", "Teacher")
-        if user is None:
-            user = User(id=1, name=initial_name, email=initial_email, is_active=True, is_admin=True)
-            db.add(user)
-        else:
-            user.name = user.name or initial_name
-            user.is_admin = True
-            if initial_email and not user.email:
-                user.email = initial_email
-        if initial_password and not user.password_hash:
-            user.password_hash = hash_password(initial_password)
-        db.commit()
+        ensure_initial_admin(db, initial_name, initial_email, initial_password)
 
 
 @app.post("/auth/login", response_model=AuthTokenRead)
@@ -147,6 +136,35 @@ def ensure_email_available(db: Session, email: str, exclude_user_id: int | None 
     if existing is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is already in use")
     return next_email
+
+
+def ensure_initial_admin(db: Session, initial_name: str, initial_email: str | None, initial_password: str | None) -> None:
+    normalized_email = normalize_email(initial_email) if initial_email else None
+    user = db.scalar(select(User).where(func.lower(User.email) == normalized_email)) if normalized_email else None
+
+    if user is None:
+        user_count = db.scalar(select(func.count()).select_from(User)) or 0
+        if user_count == 0:
+            user = User(name=initial_name, email=normalized_email, is_active=True, is_admin=True)
+            db.add(user)
+        elif normalized_email:
+            first_user = db.scalar(select(User).order_by(User.id))
+            if first_user is not None and first_user.email is None:
+                user = first_user
+                user.email = normalized_email
+
+    if user is None:
+        db.commit()
+        return
+
+    user.name = user.name or initial_name
+    user.is_active = True
+    user.is_admin = True
+    if normalized_email and not user.email:
+        user.email = normalized_email
+    if initial_password and not user.password_hash:
+        user.password_hash = hash_password(initial_password)
+    db.commit()
 
 
 @app.get("/admin/users", response_model=list[UserRead])
@@ -239,7 +257,18 @@ def ensure_class_name_available(
     return next_name
 
 
-def schedule_query(user_id: int = 1) -> Select[tuple[ScheduleRule]]:
+def semester_query(user_id: int) -> Select[tuple[Semester]]:
+    return select(Semester).where(Semester.user_id == user_id).order_by(Semester.start_date.desc())
+
+
+def get_owned_semester_or_404(db: Session, semester_id: int, user_id: int) -> Semester:
+    item = db.get(Semester, semester_id)
+    if item is None or item.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    return item
+
+
+def schedule_query(user_id: int) -> Select[tuple[ScheduleRule]]:
     return (
         select(ScheduleRule)
         .where(ScheduleRule.user_id == user_id)
@@ -248,7 +277,7 @@ def schedule_query(user_id: int = 1) -> Select[tuple[ScheduleRule]]:
     )
 
 
-def record_query(user_id: int = 1) -> Select[tuple[ClassRecord]]:
+def record_query(user_id: int) -> Select[tuple[ClassRecord]]:
     return (
         select(ClassRecord)
         .where(ClassRecord.user_id == user_id)
@@ -534,8 +563,9 @@ def stats(
         next_month = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
         end = next_month - timedelta(days=1)
     elif range == "semester":
-        semester = db.get(Semester, semester_id) if semester_id else db.scalar(
+        semester = get_owned_semester_or_404(db, semester_id, user_id) if semester_id else db.scalar(
             select(Semester)
+            .where(Semester.user_id == user_id)
             .where(Semester.start_date <= today_date, Semester.end_date >= today_date)
             .order_by(Semester.start_date.desc())
         )
@@ -605,14 +635,14 @@ def stats(
 
 @app.get("/semesters", response_model=list[SemesterRead])
 def list_semesters(db: DbSession, current_user: CurrentUser) -> list[Semester]:
-    return list(db.scalars(select(Semester).order_by(Semester.start_date.desc())))
+    return list(db.scalars(semester_query(current_user.id)))
 
 
 @app.post("/semesters", response_model=SemesterRead, status_code=status.HTTP_201_CREATED)
 def create_semester(payload: SemesterCreate, db: DbSession, current_user: CurrentUser) -> Semester:
     if payload.end_date < payload.start_date:
         raise HTTPException(status_code=400, detail="end_date must be after start_date")
-    item = Semester(**payload.model_dump())
+    item = Semester(user_id=current_user.id, **payload.model_dump())
     db.add(item)
     db.commit()
     db.refresh(item)

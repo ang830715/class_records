@@ -42,7 +42,7 @@ class ScheduleRule(Base):
     __tablename__ = "schedule_rules"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), default=1)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     teaching_class_id: Mapped[int] = mapped_column(ForeignKey("teaching_classes.id"))
     weekday: Mapped[int] = mapped_column(Integer)
     start_time: Mapped[time] = mapped_column(Time)
@@ -59,7 +59,7 @@ class ClassRecord(Base):
     __tablename__ = "class_records"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), default=1)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     schedule_rule_id: Mapped[int | None] = mapped_column(ForeignKey("schedule_rules.id"))
     teaching_class_id: Mapped[int] = mapped_column(ForeignKey("teaching_classes.id"))
     classroom: Mapped[str | None] = mapped_column(String(120))
@@ -80,9 +80,11 @@ class ClassRecord(Base):
 
 class Semester(Base):
     __tablename__ = "semesters"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_semesters_user_name"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(160), unique=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    name: Mapped[str] = mapped_column(String(160))
     start_date: Mapped[date] = mapped_column(Date)
     end_date: Mapped[date] = mapped_column(Date)
 

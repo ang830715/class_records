@@ -18,6 +18,7 @@ Current frontend views:
 
 ```text
 Today
+Missing
 Records
 Stats
 Schedule
@@ -180,7 +181,7 @@ User
 - created_at
 
 TeachingClass
-- global class catalog for now
+- user_id scoped
 
 ScheduleRule
 - user_id scoped
@@ -191,6 +192,7 @@ ClassRecord
 - schedule_rule_id can become null when an old schedule is deleted or cleared
 
 Semester
+- user_id scoped
 EditLog
 ```
 
@@ -205,14 +207,7 @@ The current importer is strict:
 4. duration_minutes must exactly match the difference between start_time and end_time.
 ```
 
-The app still initializes and uses `User(id=1)` for the first teacher/admin. Routes now derive the active teacher from `current_user.id`, which prepares the backend for future multi-user work.
-
-Important limitation:
-
-```text
-TeachingClass is still global. Before true multi-user support, decide whether class names should be shared globally or owned per user.
-Admin-created teachers get isolated schedule and record rows, but they currently share the global TeachingClass catalog.
-```
+The app bootstraps an initial admin account when the database is empty or when the configured initial admin email matches an existing user with no password yet.
 
 Schedule reset behavior:
 
@@ -369,15 +364,13 @@ Recommended next work:
 
 ```text
 1. Deploy the committed admin teacher-account management backend and frontend.
-2. Make TeachingClass user-owned so teachers do not share one global class catalog.
-3. Add PostgreSQL automatic backups on the server.
-4. Add Alembic migrations.
-5. Add tests for auth, today, records, stats, and account changes.
-6. Consider HttpOnly cookie sessions instead of localStorage bearer tokens.
-7. Add missing-days view in frontend.
-8. Add schedule editing, not only schedule create/delete.
-9. Add server-side bulk save/replace behavior for imported schedules if term schedule changes become frequent.
-10. Consider one model-powered repair retry for AI import if strict provider output still fails occasionally.
+2. Add PostgreSQL automatic backups on the server.
+3. Add Alembic migrations.
+4. Add tests for auth, today, records, stats, and account changes.
+5. Consider HttpOnly cookie sessions instead of localStorage bearer tokens.
+6. Add schedule editing, not only schedule create/delete.
+7. Add server-side bulk save/replace behavior for imported schedules if term schedule changes become frequent.
+8. Consider one model-powered repair retry for AI import if strict provider output still fails occasionally.
 ```
 
 ## SSH Note

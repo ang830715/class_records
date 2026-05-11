@@ -45,6 +45,11 @@ def _teaching_class_user_refs(connection) -> dict[int, set[int]]:
     return refs
 
 
+def _all_user_ids(connection, fallback_user_id: int) -> list[int]:
+    user_ids = [int(row[0]) for row in connection.execute(text("SELECT id FROM users ORDER BY id"))]
+    return user_ids or [fallback_user_id]
+
+
 def _migrate_teaching_classes_sqlite(engine: Engine) -> None:
     with engine.begin() as connection:
         fallback_user_id = _ensure_default_user_row(connection, "sqlite")
@@ -216,6 +221,128 @@ def _migrate_teaching_classes_postgresql(engine: Engine) -> None:
         )
 
 
+def _migrate_semesters_sqlite(engine: Engine) -> None:
+    with engine.begin() as connection:
+        fallback_user_id = _ensure_default_user_row(connection, "sqlite")
+        semester_rows = list(
+            connection.execute(
+                text("SELECT id, name, start_date, end_date FROM semesters ORDER BY id")
+            ).mappings()
+        )
+        user_ids = _all_user_ids(connection, fallback_user_id)
+        next_id = max((int(row["id"]) for row in semester_rows), default=0)
+        new_rows: list[dict[str, object]] = []
+
+        for row in semester_rows:
+            first = True
+            for user_id in user_ids:
+                if first:
+                    new_id = int(row["id"])
+                    first = False
+                else:
+                    next_id += 1
+                    new_id = next_id
+                new_rows.append(
+                    {
+                        "id": new_id,
+                        "user_id": user_id,
+                        "name": row["name"],
+                        "start_date": row["start_date"],
+                        "end_date": row["end_date"],
+                    }
+                )
+
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.execute(text("ALTER TABLE semesters RENAME TO semesters_old"))
+        connection.execute(
+            text(
+                """
+                CREATE TABLE semesters (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    name VARCHAR(160) NOT NULL,
+                    start_date DATE NOT NULL,
+                    end_date DATE NOT NULL,
+                    CONSTRAINT uq_semesters_user_name UNIQUE (user_id, name),
+                    FOREIGN KEY(user_id) REFERENCES users(id)
+                )
+                """
+            )
+        )
+        for row in new_rows:
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO semesters (id, user_id, name, start_date, end_date)
+                    VALUES (:id, :user_id, :name, :start_date, :end_date)
+                    """
+                ),
+                row,
+            )
+        connection.execute(text("DROP TABLE semesters_old"))
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+
+
+def _migrate_semesters_postgresql(engine: Engine) -> None:
+    inspector = inspect(engine)
+    with engine.begin() as connection:
+        fallback_user_id = _ensure_default_user_row(connection, "postgresql")
+        user_ids = _all_user_ids(connection, fallback_user_id)
+        connection.execute(text("ALTER TABLE semesters ADD COLUMN user_id INTEGER"))
+
+        for constraint in inspector.get_unique_constraints("semesters"):
+            if constraint.get("column_names") == ["name"] and constraint.get("name"):
+                safe_name = constraint["name"].replace('"', '""')
+                connection.execute(text(f'ALTER TABLE semesters DROP CONSTRAINT IF EXISTS "{safe_name}"'))
+
+        semester_rows = list(
+            connection.execute(
+                text("SELECT id, name, start_date, end_date FROM semesters ORDER BY id")
+            ).mappings()
+        )
+
+        for row in semester_rows:
+            connection.execute(
+                text("UPDATE semesters SET user_id = :user_id WHERE id = :semester_id"),
+                {"user_id": user_ids[0], "semester_id": int(row["id"])},
+            )
+            for user_id in user_ids[1:]:
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO semesters (user_id, name, start_date, end_date)
+                        VALUES (:user_id, :name, :start_date, :end_date)
+                        """
+                    ),
+                    {
+                        "user_id": user_id,
+                        "name": row["name"],
+                        "start_date": row["start_date"],
+                        "end_date": row["end_date"],
+                    },
+                )
+
+        connection.execute(text("UPDATE semesters SET user_id = :user_id WHERE user_id IS NULL"), {"user_id": fallback_user_id})
+        connection.execute(
+            text(
+                """
+                ALTER TABLE semesters
+                ADD CONSTRAINT semesters_user_id_fkey
+                FOREIGN KEY (user_id) REFERENCES users(id)
+                """
+            )
+        )
+        connection.execute(text("ALTER TABLE semesters ALTER COLUMN user_id SET NOT NULL"))
+        connection.execute(
+            text(
+                """
+                ALTER TABLE semesters
+                ADD CONSTRAINT uq_semesters_user_name UNIQUE (user_id, name)
+                """
+            )
+        )
+
+
 def ensure_runtime_columns(engine: Engine) -> None:
     inspector = inspect(engine)
     if "users" in inspector.get_table_names():
@@ -241,16 +368,23 @@ def ensure_runtime_columns(engine: Engine) -> None:
                 _execute_all(connection, statements)
 
     inspector = inspect(engine)
-    if "teaching_classes" not in inspector.get_table_names():
-        return
+    if "teaching_classes" in inspector.get_table_names():
+        class_columns = {column["name"] for column in inspector.get_columns("teaching_classes")}
+        if "user_id" not in class_columns:
+            if engine.dialect.name == "sqlite":
+                _migrate_teaching_classes_sqlite(engine)
+            elif engine.dialect.name == "postgresql":
+                _migrate_teaching_classes_postgresql(engine)
+            else:
+                raise RuntimeError(f"TeachingClass ownership migration is not implemented for {engine.dialect.name}")
 
-    class_columns = {column["name"] for column in inspector.get_columns("teaching_classes")}
-    if "user_id" in class_columns:
-        return
-
-    if engine.dialect.name == "sqlite":
-        _migrate_teaching_classes_sqlite(engine)
-    elif engine.dialect.name == "postgresql":
-        _migrate_teaching_classes_postgresql(engine)
-    else:
-        raise RuntimeError(f"TeachingClass ownership migration is not implemented for {engine.dialect.name}")
+    inspector = inspect(engine)
+    if "semesters" in inspector.get_table_names():
+        semester_columns = {column["name"] for column in inspector.get_columns("semesters")}
+        if "user_id" not in semester_columns:
+            if engine.dialect.name == "sqlite":
+                _migrate_semesters_sqlite(engine)
+            elif engine.dialect.name == "postgresql":
+                _migrate_semesters_postgresql(engine)
+            else:
+                raise RuntimeError(f"Semester ownership migration is not implemented for {engine.dialect.name}")
