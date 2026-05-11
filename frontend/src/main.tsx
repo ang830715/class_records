@@ -79,6 +79,31 @@ function classKey(value: string): string {
   return normalizeClassName(value).toLowerCase();
 }
 
+function clipboardImageFile(clipboardData: DataTransfer): File | null {
+  for (const item of Array.from(clipboardData.items)) {
+    if (item.kind !== "file" || !item.type.startsWith("image/")) {
+      continue;
+    }
+    const file = item.getAsFile();
+    if (!file) {
+      continue;
+    }
+    if (file.name) {
+      return file;
+    }
+    const extension = file.type.split("/")[1] || "png";
+    return new File([file], `pasted-schedule-${Date.now()}.${extension}`, { type: file.type });
+  }
+
+  for (const file of Array.from(clipboardData.files)) {
+    if (file.type.startsWith("image/")) {
+      return file;
+    }
+  }
+
+  return null;
+}
+
 function classRoomLabel(classroom?: string | null): string {
   return classroom?.trim() || "No classroom";
 }
@@ -783,6 +808,41 @@ function ScheduleView({ classes, schedule, refresh }: ReturnType<typeof useAppDa
   const [importError, setImportError] = useState<string | null>(null);
   const [importMessage, setImportMessage] = useState<string | null>(null);
 
+  function selectImportFile(file: File | null, source: "picker" | "paste") {
+    setImportFile(file);
+    setImportError(null);
+    if (file && source === "paste") {
+      setImportMessage(`Pasted screenshot ready: ${file.name || "clipboard image"}.`);
+    } else if (file) {
+      setImportMessage(`Selected screenshot: ${file.name}.`);
+    } else {
+      setImportMessage(null);
+    }
+  }
+
+  function handlePaste(data: DataTransfer): boolean {
+    const file = clipboardImageFile(data);
+    if (!file) {
+      return false;
+    }
+    selectImportFile(file, "paste");
+    return true;
+  }
+
+  useEffect(() => {
+    function onWindowPaste(event: ClipboardEvent) {
+      if (event.defaultPrevented || !event.clipboardData) {
+        return;
+      }
+      if (handlePaste(event.clipboardData)) {
+        event.preventDefault();
+      }
+    }
+
+    window.addEventListener("paste", onWindowPaste);
+    return () => window.removeEventListener("paste", onWindowPaste);
+  }, []);
+
   async function addRule(event: React.FormEvent) {
     event.preventDefault();
     if (!form.teaching_class_id) return;
@@ -928,9 +988,25 @@ function ScheduleView({ classes, schedule, refresh }: ReturnType<typeof useAppDa
       </header>
       <form className="toolbar-form schedule-form" onSubmit={importSchedule}>
         <h3 className="form-title">Import timetable image</h3>
+        <div
+          className="paste-target"
+          tabIndex={0}
+          onPaste={(event) => {
+            if (handlePaste(event.clipboardData)) {
+              event.preventDefault();
+            }
+          }}
+        >
+          <Upload size={24} />
+          <div>
+            <strong>Paste a screenshot here</strong>
+            <span>Copy a timetable screenshot, then press Ctrl+V or Command+V.</span>
+            {importFile && <em>{importFile.name || "Clipboard image"} is ready to import.</em>}
+          </div>
+        </div>
         <label className="field wide-field">
-          <span>Screenshot</span>
-          <input className="control file-control" type="file" accept="image/*" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
+          <span>Or choose image file</span>
+          <input className="control file-control" type="file" accept="image/*" onChange={(event) => selectImportFile(event.target.files?.[0] ?? null, "picker")} />
         </label>
         <label className="field compact">
           <span>Active from</span>

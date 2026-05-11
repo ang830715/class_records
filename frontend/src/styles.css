@@ -217,6 +217,46 @@ nav {
   padding: 8px 12px;
 }
 
+.paste-target {
+  display: flex;
+  align-items: center;
+  flex: 2 1 360px;
+  gap: 14px;
+  min-height: 86px;
+  border: 2px dashed #b8cbc6;
+  border-radius: 10px;
+  padding: 16px;
+  color: #2d5356;
+  background: #f0f8f6;
+  outline: none;
+}
+
+.paste-target:focus,
+.paste-target:hover {
+  border-color: #2f6f73;
+  background: #e4f4f1;
+}
+
+.paste-target strong,
+.paste-target span,
+.paste-target em {
+  display: block;
+}
+
+.paste-target span {
+  margin-top: 4px;
+  color: #5f7174;
+  font-size: 0.9rem;
+}
+
+.paste-target em {
+  margin-top: 6px;
+  color: #155f37;
+  font-size: 0.88rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .banner,
 .success-banner,
 .loading,
